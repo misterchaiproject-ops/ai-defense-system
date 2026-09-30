@@ -1,0 +1,24 @@
+channel/core.py:28:1: UP035 [*] Import from `collections.abc` instead: `Mapping`
+channel/core.py:28:1: UP035 `typing.FrozenSet` is deprecated, use `frozenset` instead
+channel/core.py:101:21: UP037 [*] Remove quotes from type annotation
+channel/core.py:126:26: UP045 [*] Use `X | None` for type annotations
+channel/core.py:126:35: UP006 [*] Use `frozenset` instead of `FrozenSet` for type annotation
+contracts/actions.py:14:7: UP042 Class Action inherits from both `str` and `enum.Enum`
+contracts/agent_identity.py:13:1: UP035 `typing.FrozenSet` is deprecated, use `frozenset` instead
+contracts/agent_identity.py:31:12: UP006 [*] Use `frozenset` instead of `FrozenSet` for type annotation
+contracts/proposal.py:35:12: UP045 [*] Use `X | None` for type annotations
+contracts/reason_codes.py:20:7: UP042 Class ReasonCode inherits from both `str` and `enum.Enum`
+contracts/roles.py:14:7: UP042 Class Role inherits from both `str` and `enum.Enum`
+contracts/validation_result.py:12:1: UP035 [*] Import from `collections.abc` instead: `Mapping`
+contracts/validation_result.py:48:20: UP037 [*] Remove quotes from type annotation
+contracts/validation_result.py:53:57: UP037 [*] Remove quotes from type annotation
+guardrail/core.py:24:1: UP035 [*] Import from `collections.abc` instead: `Mapping`
+guardrail/core.py:24:1: UP035 `typing.FrozenSet` is deprecated, use `frozenset` instead
+guardrail/core.py:42:32: UP006 [*] Use `frozenset` instead of `FrozenSet` for type annotation
+guardrail/core.py:59:18: UP006 [*] Use `frozenset` instead of `FrozenSet` for type annotation
+guardrail/core.py:80:21: UP045 [*] Use `X | None` for type annotations
+guardrail/core.py:115:24: UP006 [*] Use `frozenset` instead of `FrozenSet` for type annotation
+orchestrator/core.py:18:1: UP035 [*] Import from `collections.abc` instead: `Mapping`
+orchestrator/core.py:54:10: UP045 [*] Use `X | None` for type annotations
+Found 22 errors.
+[*] 16 fixable with the `--fix` option (3 hidden fixes can be enabled with the `--unsafe-fixes` option).

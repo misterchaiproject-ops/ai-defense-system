@@ -23,9 +23,10 @@ import secrets
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, FrozenSet, Mapping, Optional
+from typing import Any
 
 from contracts import ReasonCode, ValidationResult
 
@@ -98,7 +99,7 @@ class _ReplayCache:
         if max_size <= 0:
             raise ValueError("max_size must be > 0")
         self._max = max_size
-        self._seen: "OrderedDict[str, None]" = OrderedDict()
+        self._seen: OrderedDict[str, None] = OrderedDict()
         self._lock = threading.Lock()
 
     def check_and_add(self, nonce: str) -> bool:
@@ -123,7 +124,7 @@ class SecureAgentChannel:
         shared_secret: bytes,
         *,
         key_id: str = "default-v1",
-        allowed_senders: Optional[FrozenSet[str]] = None,
+        allowed_senders: frozenset[str] | None = None,
         max_delay_seconds: float = 5.0,
     ) -> None:
         if not isinstance(shared_secret, (bytes, bytearray)):

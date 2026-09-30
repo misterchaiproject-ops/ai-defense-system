@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import FrozenSet
 
 from .roles import Role
 
@@ -28,7 +27,7 @@ class AgentIdentity:
         roles: A non-empty set of roles the agent holds.
     """
     agent_id: str
-    roles: FrozenSet[Role]
+    roles: frozenset[Role]
 
     def __post_init__(self) -> None:
         if not isinstance(self.agent_id, str):

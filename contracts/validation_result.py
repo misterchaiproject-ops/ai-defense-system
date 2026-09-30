@@ -7,9 +7,10 @@ immutable, self-documenting object.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
 from .reason_codes import ReasonCode
 
@@ -45,11 +46,11 @@ class ValidationResult:
         return self.approved
 
     @classmethod
-    def ok(cls) -> "ValidationResult":
+    def ok(cls) -> ValidationResult:
         """Build a success result."""
         return cls(approved=True, reason=ReasonCode.OK)
 
     @classmethod
-    def reject(cls, reason: ReasonCode, **meta: Any) -> "ValidationResult":
+    def reject(cls, reason: ReasonCode, **meta: Any) -> ValidationResult:
         """Build a rejection with optional metadata."""
         return cls(approved=False, reason=reason, metadata=meta)

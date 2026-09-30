@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Optional
 
 from .actions import Action
 
@@ -32,7 +31,7 @@ class Proposal:
     """
     action: Action
     target: str
-    value: Optional[float] = None
+    value: float | None = None
 
     def __post_init__(self) -> None:
         # Action must be the enum, not a raw string

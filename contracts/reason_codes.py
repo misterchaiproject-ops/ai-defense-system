@@ -13,11 +13,11 @@ The code inherits from `str` so it serializes cleanly to JSON.
 
 from __future__ import annotations
 
-from enum import Enum, unique
+from enum import StrEnum, unique
 
 
 @unique
-class ReasonCode(str, Enum):
+class ReasonCode(StrEnum):
     """All possible outcomes of a validation or verification."""
 
     # ---- Success ---------------------------------------------------------

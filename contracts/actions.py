@@ -7,11 +7,11 @@ Using an Enum (not free-form strings) prevents typos and injection.
 
 from __future__ import annotations
 
-from enum import Enum, unique
+from enum import StrEnum, unique
 
 
 @unique
-class Action(str, Enum):
+class Action(StrEnum):
     """
     The complete list of actions an agent may propose.
 

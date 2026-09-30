@@ -15,7 +15,8 @@ Design:
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 from channel import Envelope, SecureAgentChannel
 from contracts import (
@@ -51,7 +52,7 @@ class SecureOrchestrator:
     # ------------------------------------------------------------------
     def process_outbound(
         self, proposal: Proposal, identity: AgentIdentity
-    ) -> Optional[Envelope]:
+    ) -> Envelope | None:
         """
         Validate a proposal, then sign it.
 

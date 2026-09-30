@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Mapping
 from types import MappingProxyType
-from typing import FrozenSet, Mapping, Optional
 
 from contracts import (
     Action,
@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 # RBAC matrix: action -> roles allowed to perform it
 # ---------------------------------------------------------------------------
 
-_ACTION_ROLES: Mapping[Action, FrozenSet[Role]] = MappingProxyType({
+_ACTION_ROLES: Mapping[Action, frozenset[Role]] = MappingProxyType({
     Action.READ_STATE: frozenset({
         Role.OBSERVER, Role.OPERATOR, Role.SUPERVISOR, Role.ADMIN,
     }),
@@ -56,7 +56,7 @@ _ACTION_ROLES: Mapping[Action, FrozenSet[Role]] = MappingProxyType({
 
 
 # Actions that REQUIRE a numeric value
-_REQUIRES_VALUE: FrozenSet[Action] = frozenset({
+_REQUIRES_VALUE: frozenset[Action] = frozenset({
     Action.ADJUST_METRIC,
     Action.MODIFY_STATE,
 })
@@ -77,7 +77,7 @@ class DeterministicGuardrail:
         self,
         operational_limits: Mapping[str, float],
         *,
-        min_values: Optional[Mapping[str, float]] = None,
+        min_values: Mapping[str, float] | None = None,
     ) -> None:
         # ---- Validate limits ----
         if not isinstance(operational_limits, Mapping) or not operational_limits:
@@ -112,7 +112,7 @@ class DeterministicGuardrail:
         # ---- Immutable internal state ----
         self._limits: Mapping[str, float] = MappingProxyType(clean_limits)
         self._mins: Mapping[str, float] = MappingProxyType(clean_mins)
-        self._targets: FrozenSet[str] = frozenset(clean_limits.keys())
+        self._targets: frozenset[str] = frozenset(clean_limits.keys())
 
     # ------------------------------------------------------------------
     # Public API

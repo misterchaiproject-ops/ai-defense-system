@@ -7,11 +7,11 @@ The mapping from roles to actions lives in the Guardrail.
 
 from __future__ import annotations
 
-from enum import Enum, unique
+from enum import StrEnum, unique
 
 
 @unique
-class Role(str, Enum):
+class Role(StrEnum):
     """
     The set of roles an agent can hold.
 
