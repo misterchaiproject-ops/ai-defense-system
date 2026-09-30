@@ -54,7 +54,7 @@ class Proposal:
             if not math.isfinite(self.value):
                 raise ValueError("value must be finite (no NaN, no Inf)")
 
-    def to_payload(self) -> dict:
+    def to_payload(self) -> dict[str, object]:
         """Deterministic dict representation for signing/serialization."""
         return {
             "action": self.action.value,

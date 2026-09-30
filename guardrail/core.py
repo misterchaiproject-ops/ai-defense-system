@@ -172,7 +172,7 @@ class DeterministicGuardrail:
             if proposal.action in _REQUIRES_VALUE and proposal.value is None:
                 return ValidationResult.reject(
                     ReasonCode.MALFORMED_PAYLOAD,
-                    reason="action requires a value",
+                    detail="action requires a value",
                 )
 
             # 6) All checks passed

@@ -1,0 +1,18 @@
+[1mdiff --git a/contracts/proposal.py b/contracts/proposal.py[m
+[1mindex c6c33f8..95eb48a 100644[m
+[1m--- a/contracts/proposal.py[m
+[1m+++ b/contracts/proposal.py[m
+[36m@@ -54,10 +54,9 @@[m [mclass Proposal:[m
+             if not math.isfinite(self.value):[m
+                 raise ValueError("value must be finite (no NaN, no Inf)")[m
+ [m
+[31m-    def to_payload(self) -> dict:[m
+[32m+[m[32m    def to_payload(self) -> dict[str, object]:[m
+         """Deterministic dict representation for signing/serialization."""[m
+         return {[m
+             "action": self.action.value,[m
+             "target": self.target,[m
+[31m-            "value": self.value,[m
+[31m-        }[m
+[32m+[m[32m            "value": self.value,[m
+\ No newline at end of file[m

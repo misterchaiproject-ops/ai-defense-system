@@ -1,0 +1,6 @@
+contracts/proposal.py:57: error: Missing type arguments for generic type "dict"  [type-arg]
+guardrail/core.py:131: error: Statement is unreachable  [unreachable]
+guardrail/core.py:133: error: Statement is unreachable  [unreachable]
+guardrail/core.py:173: error: "reject" of "ValidationResult" gets multiple values for keyword argument "reason"  [misc]
+guardrail/core.py:175: error: Argument "reason" to "reject" of "ValidationResult" has incompatible type "str"; expected "ReasonCode"  [arg-type]
+Found 5 errors in 2 files (checked 13 source files)
