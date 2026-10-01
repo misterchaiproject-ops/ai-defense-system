@@ -1,6 +1,7 @@
-# AI Defense System — Master Plan v2.2
+# AI Defense System — Master Plan
 
-**Status:** Approved after Gemini review
+**Version:** 2.3
+**Status:** Active
 **Date:** 2026-10-01
 **Timeline:** 12-18 months (realistic)
 **Reference:** NIST SP 800-53, OWASP ACS, IETF PQC, EU AI Act, CRA
@@ -22,86 +23,94 @@ NIST COSAiS, OWASP ACS, and IETF standards.
 3. Security is architectural.
 4. Documentation is part of code.
 5. Assume breach.
-6. **Assume independent verification** (new).
+6. Assume independent verification.
 
 ---
 
-## Immediate Focus (Month 1)
+## Current Phase: Phase 2 (Test Expansion)
 
-### Stage 2: Expand Tests
-- 13 → 85 tests
-- Coverage: 40% → 90%
-- Add hypothesis (property-based)
-- Target: 0 regressions
+### Progress
 
-### Stage 2.5: Standards & Threat Model
-- Add **Indirect Prompt Injection** to threat model
-- Add **Agent Memory Poisoning** to threat model
-- Add **Supply Chain Attacks on Tools**
-- Review OWASP ACS, map controls
-- Cryptographic IDs (PQC-signed) as SPIFFE placeholder
+| Module | Tests | Coverage | Status |
+|--------|-------|----------|--------|
+| src/contracts/proposal.py | 31 | 100% | DONE |
+| src/contracts/agent_identity.py | 0 | 0% | IN PROGRESS |
+| src/contracts/validation_result.py | 0 | 0% | PENDING |
+| src/contracts/reason_codes.py | 0 | 0% | PENDING |
+| src/contracts/actions.py | 0 | 0% | PENDING |
+| src/contracts/roles.py | 0 | 0% | PENDING |
+| src/guardrail/core.py | 0 | 0% | PENDING |
+| src/channel/core.py | 0 | 0% | PENDING |
+| src/orchestrator/core.py | 0 | 0% | PENDING |
+| tests/test_smoke.py | 13 | smoke | DONE |
+| **Total** | **44** | **~50%** | **27% of target** |
+
+**Target:** 160 tests, 90% coverage, CI enforced.
 
 ---
 
 ## Roadmap (14 Stages, 12-18 months)
 
-| Stage | Focus | Timeline |
-|-------|-------|----------|
-| 1 | Foundation hardening | ✅ Done |
-| 2 | Expand tests | Month 1 |
-| 2.5 | Standards & threat model | Month 1 |
-| 3 | Architectural fixes | Month 2 |
-| 4 | Comprehensive docs | Month 2 |
-| 5 | Performance benchmarks | Month 2 |
-| 6 | Red Team Agent | Month 3-4 |
-| 6.5 | NVIDIA OpenShell integration | Month 4 |
-| 7 | Advanced features (Audit, Keys, PQC) | Month 5-7 |
-| 8 | Standards & interop | Month 7-8 |
-| 8.5 | SPIFFE/SPIRE + OpenShell deep | Month 8 |
-| 9 | Academic output (White Paper) | Month 9-10 |
-| 9.5 | Independent evaluation (AMTSO) | Month 10 |
-| 10 | Commercial (Pitch, partnerships) | Month 10-11 |
-| 10.5 | EU Horizon Application | Month 12 |
-| 11 | Ethics & legal | Parallel |
-| 12 | Incident Response | Month 3 |
-| 13 | EU AI Act + CRA compliance | Month 6-7 |
-| 14 | Standardization (IETF/OWASP) | Month 12+ |
+| Stage | Focus | Timeline | Status |
+|-------|-------|----------|--------|
+| 1 | Foundation hardening | Month 1 | DONE |
+| 2 | Expand tests | Month 1-2 | IN PROGRESS |
+| 2.5 | Standards & threat model | Month 2 | PENDING |
+| 3 | Architectural fixes | Month 2 | PENDING |
+| 4 | Comprehensive docs | Month 3 | PENDING |
+| 5 | Performance benchmarks | Month 3 | PENDING |
+| 6 | Red Team Agent | Month 4-5 | PENDING |
+| 6.5 | NVIDIA OpenShell integration | Month 5 | PENDING |
+| 7 | Advanced features (Audit, Keys, PQC) | Month 6-8 | PENDING |
+| 8 | Standards & interop | Month 8-9 | PENDING |
+| 8.5 | SPIFFE/SPIRE + OpenShell deep | Month 9 | PENDING |
+| 9 | Academic output (White Paper) | Month 10-11 | PENDING |
+| 9.5 | Independent evaluation (AMTSO) | Month 11 | PENDING |
+| 10 | Commercial (Pitch, partnerships) | Month 11-12 | PENDING |
+| 10.5 | EU Horizon Application | Month 12 | PENDING |
+| 11 | Ethics & legal | Parallel | PENDING |
+| 12 | Incident Response | Month 3 | PENDING |
+| 13 | EU AI Act + CRA compliance | Month 7-8 | PENDING |
+| 14 | Standardization (IETF/OWASP) | Month 12+ | PENDING |
 
 ---
 
 ## Deferred (explicit)
 
 - Formal Verification (TLA+, Z3): Month 10+
-- SPIFFE/SPIRE: Month 6+ (use simple Cryptographic IDs now)
+- SPIFFE/SPIRE: Month 6+ (simple Cryptographic IDs now)
 - Multi-process (Redis): Month 9+
 - EU Horizon Application: Month 12
 - Full IETF standardization: Year 2
 
 ---
 
-## Target Standards (in priority)
+## Target Standards (priority order)
 
-1. **OWASP ACS** (Agentic Control Standard) — closest fit
-2. **NIST COSAiS** — overlays on SP 800-53
-3. **AMTSO** — independent testing
-4. **IETF PQC** — identity + timestamps
-5. **EU AI Act + CRA** — European compliance
+1. OWASP ACS (Agentic Control Standard)
+2. NIST COSAiS (overlays on SP 800-53)
+3. AMTSO (independent testing)
+4. IETF PQC (identity + timestamps)
+5. EU AI Act + CRA
 
 ---
 
 ## Success Metrics
 
-- **Technical:** ASR < 5%, 90% coverage, 0 issues.
-- **Academic:** White Paper + Open Dataset.
-- **Standard:** OWASP ACS alignment.
-- **Commercial:** Sustainable business model.
-- **Community:** Adoption by 3+ external projects.
+- **Technical:** ASR < 5%, 90% coverage, 0 issues
+- **Academic:** White Paper + Open Dataset
+- **Standard:** OWASP ACS alignment
+- **Commercial:** Sustainable business model
+- **Community:** Adoption by 3+ external projects
 
 ---
 
-## Key ADRs (20 total)
+## Recent Milestones
 
-(see docs/adr/ for details)
+- 2026-10-01: Migrated to src/ layout
+- 2026-10-01: 31 tests for proposal.py (100% coverage)
+- 2026-10-01: CI/CD operational
+- 2026-10-01: Constitution v1.0 drafted
 
 ---
 
@@ -118,4 +127,4 @@ NIST COSAiS, OWASP ACS, and IETF standards.
 
 ---
 
-**End of Master Plan v2.2**
+**End of Master Plan v2.3**
