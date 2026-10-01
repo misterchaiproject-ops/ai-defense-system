@@ -26,6 +26,7 @@ class AgentIdentity:
         agent_id: A short, unique, ASCII identifier.
         roles: A non-empty set of roles the agent holds.
     """
+
     agent_id: str
     roles: frozenset[Role]
 
@@ -33,9 +34,7 @@ class AgentIdentity:
         if not isinstance(self.agent_id, str):
             raise TypeError("agent_id must be a string")
         if not _VALID_ID.match(self.agent_id):
-            raise ValueError(
-                f"invalid agent_id (must match {_VALID_ID.pattern})"
-            )
+            raise ValueError(f"invalid agent_id (must match {_VALID_ID.pattern})")
         if not isinstance(self.roles, frozenset):
             raise TypeError("roles must be a frozenset")
         if not self.roles:

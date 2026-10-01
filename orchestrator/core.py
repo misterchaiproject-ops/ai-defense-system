@@ -50,9 +50,7 @@ class SecureOrchestrator:
     # ------------------------------------------------------------------
     # Outbound
     # ------------------------------------------------------------------
-    def process_outbound(
-        self, proposal: Proposal, identity: AgentIdentity
-    ) -> Envelope | None:
+    def process_outbound(self, proposal: Proposal, identity: AgentIdentity) -> Envelope | None:
         """
         Validate a proposal, then sign it.
 
@@ -80,9 +78,7 @@ class SecureOrchestrator:
     # ------------------------------------------------------------------
     # Inbound
     # ------------------------------------------------------------------
-    def process_inbound(
-        self, envelope: Envelope, identity: AgentIdentity
-    ) -> ValidationResult:
+    def process_inbound(self, envelope: Envelope, identity: AgentIdentity) -> ValidationResult:
         """
         Verify signature, then validate payload with Guardrail.
 
@@ -108,6 +104,7 @@ class SecureOrchestrator:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _reconstruct_proposal(payload: Mapping[str, Any]) -> Proposal:
     """Rebuild a Proposal from a verified payload. Raises on malformed input."""

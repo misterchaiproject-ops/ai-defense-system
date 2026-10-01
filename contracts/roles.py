@@ -17,6 +17,7 @@ class Role(StrEnum):
 
     An agent may hold multiple roles simultaneously.
     """
+
     OBSERVER = "observer"
     OPERATOR = "operator"
     SUPERVISOR = "supervisor"

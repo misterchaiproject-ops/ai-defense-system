@@ -52,9 +52,11 @@ def _sanitize(value: Any, max_len: int = 64) -> str:
 # Envelope
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True, slots=True)
 class Envelope:
     """Immutable signed message."""
+
     version: str
     key_id: str
     sender_id: str
@@ -70,9 +72,7 @@ class Envelope:
             raise ValueError("invalid key_id")
         if not _SENDER_RE.match(self.sender_id):
             raise ValueError("invalid sender_id")
-        if isinstance(self.timestamp, bool) or not isinstance(
-            self.timestamp, (int, float)
-        ):
+        if isinstance(self.timestamp, bool) or not isinstance(self.timestamp, (int, float)):
             raise TypeError("timestamp must be numeric")
         if not math.isfinite(self.timestamp):
             raise ValueError("timestamp must be finite")
@@ -83,14 +83,13 @@ class Envelope:
         if not isinstance(self.payload, Mapping):
             raise TypeError("payload must be a Mapping")
         if not isinstance(self.payload, MappingProxyType):
-            object.__setattr__(
-                self, "payload", MappingProxyType(dict(self.payload))
-            )
+            object.__setattr__(self, "payload", MappingProxyType(dict(self.payload)))
 
 
 # ---------------------------------------------------------------------------
 # Replay cache
 # ---------------------------------------------------------------------------
+
 
 class _ReplayCache:
     """Bounded, thread-safe nonce cache (FIFO eviction)."""
@@ -116,6 +115,7 @@ class _ReplayCache:
 # Channel
 # ---------------------------------------------------------------------------
 
+
 class SecureAgentChannel:
     """Signs and verifies envelopes."""
 
@@ -130,18 +130,12 @@ class SecureAgentChannel:
         if not isinstance(shared_secret, (bytes, bytearray)):
             raise TypeError("shared_secret must be bytes")
         if len(shared_secret) < _MIN_SECRET_BYTES:
-            raise ValueError(
-                f"shared_secret must be >= {_MIN_SECRET_BYTES} bytes"
-            )
+            raise ValueError(f"shared_secret must be >= {_MIN_SECRET_BYTES} bytes")
         if not _SENDER_RE.match(key_id):
             raise ValueError("invalid key_id")
-        if isinstance(max_delay_seconds, bool) or not isinstance(
-            max_delay_seconds, (int, float)
-        ):
+        if isinstance(max_delay_seconds, bool) or not isinstance(max_delay_seconds, (int, float)):
             raise TypeError("max_delay_seconds must be numeric")
-        if not math.isfinite(max_delay_seconds) or not (
-            0 < max_delay_seconds <= 300
-        ):
+        if not math.isfinite(max_delay_seconds) or not (0 < max_delay_seconds <= 300):
             raise ValueError("max_delay_seconds must be in (0, 300]")
 
         if allowed_senders is not None:
@@ -158,9 +152,7 @@ class SecureAgentChannel:
     # ------------------------------------------------------------------
     # Create
     # ------------------------------------------------------------------
-    def create_message(
-        self, sender_id: str, payload: Mapping[str, Any]
-    ) -> Envelope:
+    def create_message(self, sender_id: str, payload: Mapping[str, Any]) -> Envelope:
         if not _SENDER_RE.match(sender_id):
             raise ValueError("invalid sender_id")
 
@@ -194,31 +186,21 @@ class SecureAgentChannel:
                 return ValidationResult.reject(ReasonCode.INVALID_ENVELOPE)
 
             if envelope.version != PROTOCOL_VERSION:
-                return ValidationResult.reject(
-                    ReasonCode.UNSUPPORTED_VERSION
-                )
+                return ValidationResult.reject(ReasonCode.UNSUPPORTED_VERSION)
 
             if not hmac.compare_digest(envelope.key_id, self._key_id):
                 return ValidationResult.reject(ReasonCode.UNKNOWN_KEY_ID)
 
             if self._allowed is not None and envelope.sender_id not in self._allowed:
-                logger.warning(
-                    "Unauthorized sender: %s", _sanitize(envelope.sender_id)
-                )
-                return ValidationResult.reject(
-                    ReasonCode.ROLE_NOT_PERMITTED
-                )
+                logger.warning("Unauthorized sender: %s", _sanitize(envelope.sender_id))
+                return ValidationResult.reject(ReasonCode.ROLE_NOT_PERMITTED)
 
             now = time.time()
             delta = now - envelope.timestamp
             if delta > self._max_delay:
-                return ValidationResult.reject(
-                    ReasonCode.TIMESTAMP_TOO_OLD
-                )
+                return ValidationResult.reject(ReasonCode.TIMESTAMP_TOO_OLD)
             if delta < -_MAX_CLOCK_SKEW_FUTURE:
-                return ValidationResult.reject(
-                    ReasonCode.TIMESTAMP_FROM_FUTURE
-                )
+                return ValidationResult.reject(ReasonCode.TIMESTAMP_FROM_FUTURE)
 
             if not self._replay.check_and_add(envelope.nonce):
                 logger.warning(
@@ -239,9 +221,7 @@ class SecureAgentChannel:
                     "Invalid signature from %s",
                     _sanitize(envelope.sender_id),
                 )
-                return ValidationResult.reject(
-                    ReasonCode.INVALID_SIGNATURE
-                )
+                return ValidationResult.reject(ReasonCode.INVALID_SIGNATURE)
 
             return ValidationResult.ok()
 

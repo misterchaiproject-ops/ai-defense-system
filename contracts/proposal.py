@@ -29,6 +29,7 @@ class Proposal:
         target: The name of the system being acted upon.
         value: Optional numeric value (e.g., a new setpoint).
     """
+
     action: Action
     target: str
     value: float | None = None

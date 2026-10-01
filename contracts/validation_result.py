@@ -24,18 +24,15 @@ class ValidationResult:
         approved=True  <=>  reason is ReasonCode.OK
         approved=False <=>  reason is NOT ReasonCode.OK
     """
+
     approved: bool
     reason: ReasonCode
-    metadata: Mapping[str, Any] = field(
-        default_factory=lambda: MappingProxyType({})
-    )
+    metadata: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
         # Enforce immutable metadata
         if not isinstance(self.metadata, MappingProxyType):
-            object.__setattr__(
-                self, "metadata", MappingProxyType(dict(self.metadata))
-            )
+            object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
         # Enforce approved <-> reason consistency
         if self.approved and self.reason is not ReasonCode.OK:
             raise ValueError("approved=True requires ReasonCode.OK")

@@ -17,6 +17,7 @@ class Action(StrEnum):
 
     Inherits from `str` so it serializes cleanly to JSON.
     """
+
     READ_STATE = "read_state"
     ADJUST_METRIC = "adjust_metric"
     MODIFY_STATE = "modify_state"

@@ -39,27 +39,46 @@ logger = logging.getLogger(__name__)
 # RBAC matrix: action -> roles allowed to perform it
 # ---------------------------------------------------------------------------
 
-_ACTION_ROLES: Mapping[Action, frozenset[Role]] = MappingProxyType({
-    Action.READ_STATE: frozenset({
-        Role.OBSERVER, Role.OPERATOR, Role.SUPERVISOR, Role.ADMIN,
-    }),
-    Action.ADJUST_METRIC: frozenset({
-        Role.OPERATOR, Role.SUPERVISOR, Role.ADMIN,
-    }),
-    Action.MODIFY_STATE: frozenset({
-        Role.SUPERVISOR, Role.ADMIN,
-    }),
-    Action.SHUTDOWN: frozenset({
-        Role.SUPERVISOR, Role.ADMIN,
-    }),
-})
+_ACTION_ROLES: Mapping[Action, frozenset[Role]] = MappingProxyType(
+    {
+        Action.READ_STATE: frozenset(
+            {
+                Role.OBSERVER,
+                Role.OPERATOR,
+                Role.SUPERVISOR,
+                Role.ADMIN,
+            }
+        ),
+        Action.ADJUST_METRIC: frozenset(
+            {
+                Role.OPERATOR,
+                Role.SUPERVISOR,
+                Role.ADMIN,
+            }
+        ),
+        Action.MODIFY_STATE: frozenset(
+            {
+                Role.SUPERVISOR,
+                Role.ADMIN,
+            }
+        ),
+        Action.SHUTDOWN: frozenset(
+            {
+                Role.SUPERVISOR,
+                Role.ADMIN,
+            }
+        ),
+    }
+)
 
 
 # Actions that REQUIRE a numeric value
-_REQUIRES_VALUE: frozenset[Action] = frozenset({
-    Action.ADJUST_METRIC,
-    Action.MODIFY_STATE,
-})
+_REQUIRES_VALUE: frozenset[Action] = frozenset(
+    {
+        Action.ADJUST_METRIC,
+        Action.MODIFY_STATE,
+    }
+)
 
 
 class DeterministicGuardrail:
@@ -90,9 +109,7 @@ class DeterministicGuardrail:
             if isinstance(limit, bool) or not isinstance(limit, (int, float)):
                 raise TypeError(f"limit for {target!r} must be numeric")
             if not math.isfinite(limit) or limit < 0:
-                raise ValueError(
-                    f"limit for {target!r} must be finite and >= 0"
-                )
+                raise ValueError(f"limit for {target!r} must be finite and >= 0")
             clean_limits[target] = float(limit)
 
         # ---- Validate min_values ----
@@ -117,9 +134,7 @@ class DeterministicGuardrail:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def validate(
-        self, proposal: Proposal, identity: AgentIdentity
-    ) -> ValidationResult:
+    def validate(self, proposal: Proposal, identity: AgentIdentity) -> ValidationResult:
         """
         Validate a proposal from a given identity.
 
@@ -150,9 +165,7 @@ class DeterministicGuardrail:
             # 4) Value checks (only if value is present)
             if proposal.value is not None:
                 if not math.isfinite(proposal.value):
-                    return ValidationResult.reject(
-                        ReasonCode.VALUE_NOT_FINITE
-                    )
+                    return ValidationResult.reject(ReasonCode.VALUE_NOT_FINITE)
                 max_allowed = self._limits[proposal.target]
                 if proposal.value > max_allowed:
                     return ValidationResult.reject(

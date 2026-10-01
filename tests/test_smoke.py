@@ -25,6 +25,7 @@ from orchestrator import SecureOrchestrator
 # Test: imports work
 # ---------------------------------------------------------------------------
 
+
 def test_imports_ok() -> None:
     """All public APIs must be importable."""
     assert Action is not None
@@ -43,6 +44,7 @@ def test_imports_ok() -> None:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def guardrail() -> DeterministicGuardrail:
@@ -94,6 +96,7 @@ def observer() -> AgentIdentity:
 # Test: Proposal + AgentIdentity
 # ---------------------------------------------------------------------------
 
+
 def test_proposal_creation() -> None:
     p = Proposal(action=Action.ADJUST_METRIC, target="cooling_system", value=60.0)
     assert p.action is Action.ADJUST_METRIC
@@ -125,9 +128,8 @@ def test_agent_identity_basic() -> None:
 # Test: Guardrail
 # ---------------------------------------------------------------------------
 
-def test_guardrail_accepts_valid(
-    guardrail: DeterministicGuardrail, admin: AgentIdentity
-) -> None:
+
+def test_guardrail_accepts_valid(guardrail: DeterministicGuardrail, admin: AgentIdentity) -> None:
     p = Proposal(action=Action.ADJUST_METRIC, target="cooling_system", value=60.0)
     result = guardrail.validate(p, admin)
     assert result.approved is True
@@ -143,9 +145,7 @@ def test_guardrail_rejects_unknown_target(
     assert result.reason is ReasonCode.TARGET_NOT_ALLOWED
 
 
-def test_guardrail_rejects_rbac(
-    guardrail: DeterministicGuardrail, observer: AgentIdentity
-) -> None:
+def test_guardrail_rejects_rbac(guardrail: DeterministicGuardrail, observer: AgentIdentity) -> None:
     p = Proposal(action=Action.ADJUST_METRIC, target="cooling_system", value=60.0)
     result = guardrail.validate(p, observer)
     assert result.approved is False
@@ -164,6 +164,7 @@ def test_guardrail_rejects_above_limit(
 # ---------------------------------------------------------------------------
 # Test: Channel
 # ---------------------------------------------------------------------------
+
 
 def test_channel_round_trip(channel: SecureAgentChannel) -> None:
     env = channel.create_message("Agent_A", {"x": 1})
@@ -184,12 +185,11 @@ def test_channel_rejects_replay(channel: SecureAgentChannel) -> None:
 # Test: Orchestrator — end-to-end
 # ---------------------------------------------------------------------------
 
+
 def test_orchestrator_full_round_trip(
     orchestrator: SecureOrchestrator, admin: AgentIdentity
 ) -> None:
-    p = Proposal(
-        action=Action.ADJUST_METRIC, target="cooling_system", value=60.0
-    )
+    p = Proposal(action=Action.ADJUST_METRIC, target="cooling_system", value=60.0)
     envelope = orchestrator.process_outbound(p, admin)
     assert envelope is not None
 
@@ -201,9 +201,7 @@ def test_orchestrator_full_round_trip(
 def test_orchestrator_rejects_at_outbound(
     orchestrator: SecureOrchestrator, observer: AgentIdentity
 ) -> None:
-    p = Proposal(
-        action=Action.ADJUST_METRIC, target="cooling_system", value=60.0
-    )
+    p = Proposal(action=Action.ADJUST_METRIC, target="cooling_system", value=60.0)
     envelope = orchestrator.process_outbound(p, observer)
     assert envelope is None
 
@@ -219,9 +217,7 @@ def test_orchestrator_enforces_guardrail_inbound(
     Send a SHUTDOWN proposal signed by admin, then verify with an
     observer identity — inbound Guardrail must reject.
     """
-    p = Proposal(
-        action=Action.SHUTDOWN, target="cooling_system", value=0.0
-    )
+    p = Proposal(action=Action.SHUTDOWN, target="cooling_system", value=0.0)
     envelope = orchestrator.process_outbound(p, admin)
     assert envelope is not None
 
