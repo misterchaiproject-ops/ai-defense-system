@@ -261,7 +261,6 @@ class SecureAgentChannel:
                 ensure_ascii=True,
                 separators=(",", ":"),
                 allow_nan=False,
-                default=str,
             ).encode("utf-8")
         except (TypeError, ValueError) as exc:
             raise ValueError(f"payload not serializable: {exc}") from exc

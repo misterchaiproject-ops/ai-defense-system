@@ -21,7 +21,6 @@ from contracts import (
 from guardrail import DeterministicGuardrail
 from orchestrator import SecureOrchestrator
 
-
 # ---------------------------------------------------------------------------
 # Test: imports work
 # ---------------------------------------------------------------------------

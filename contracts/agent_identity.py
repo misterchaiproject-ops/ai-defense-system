@@ -40,6 +40,8 @@ class AgentIdentity:
             raise TypeError("roles must be a frozenset")
         if not self.roles:
             raise ValueError("roles must be non-empty")
+        if not all(isinstance(r, Role) for r in self.roles):
+            raise TypeError("all roles must be Role instances")
 
     def has_role(self, role: Role) -> bool:
         """Check whether this identity has a given role."""
