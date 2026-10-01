@@ -45,9 +45,7 @@ class Proposal:
 
 def _validate_action(action: object) -> None:
     if not isinstance(action, Action):
-        raise TypeError(
-            f"action must be an Action enum member, got {type(action).__name__}"
-        )
+        raise TypeError(f"action must be an Action enum member, got {type(action).__name__}")
 
 
 def _validate_target(target: object) -> None:
@@ -58,9 +56,7 @@ def _validate_target(target: object) -> None:
     if not target.strip():
         raise ValueError("target must not be whitespace-only")
     if len(target) > MAX_TARGET_LENGTH:
-        raise ValueError(
-            f"target must be <= {MAX_TARGET_LENGTH} characters, got {len(target)}"
-        )
+        raise ValueError(f"target must be <= {MAX_TARGET_LENGTH} characters, got {len(target)}")
     if _CONTROL_CHARS.search(target):
         raise ValueError("target must not contain control characters")
 
@@ -71,9 +67,7 @@ def _validate_value(value: object) -> None:
     if isinstance(value, bool):
         raise TypeError("value must be a real number, not bool")
     if not isinstance(value, (int, float)):
-        raise TypeError(
-            f"value must be int, float, or None, got {type(value).__name__}"
-        )
+        raise TypeError(f"value must be int, float, or None, got {type(value).__name__}")
     if not math.isfinite(value):
         raise ValueError("value must be finite (no NaN, no Inf)")
 
