@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+      - name: mypy --strict
+        run: uv run mypy contracts guardrail channel orchestrator tests
+      - name: ruff check
+        run: uv run ruff check .
+      - name: ruff format check
+        run: uv run ruff format --check .
+      - name: bandit
+        run: uv run bandit -r contracts guardrail channel orchestrator -q
+      - name: pytest
+        run: uv run pytest --cov=contracts --cov=guardrail --cov=channel --cov=orchestrator --cov-report=term-missing --cov-fail-under=40 -v
