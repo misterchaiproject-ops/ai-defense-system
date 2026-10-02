@@ -106,7 +106,7 @@ class DeterministicGuardrail:
         for target, limit in operational_limits.items():
             if not isinstance(target, str) or not target.strip():
                 raise ValueError(f"invalid target key: {target!r}")
-            if isinstance(limit, bool) or not isinstance(limit, (int, float)):
+            if isinstance(limit, bool) or not isinstance(limit, int | float):
                 raise TypeError(f"limit for {target!r} must be numeric")
             if not math.isfinite(limit) or limit < 0:
                 raise ValueError(f"limit for {target!r} must be finite and >= 0")
@@ -118,7 +118,7 @@ class DeterministicGuardrail:
             for target, min_val in min_values.items():
                 if target not in clean_limits:
                     raise ValueError(f"min for unknown target: {target!r}")
-                if isinstance(min_val, bool) or not isinstance(min_val, (int, float)):
+                if isinstance(min_val, bool) or not isinstance(min_val, int | float):
                     raise TypeError(f"min for {target!r} must be numeric")
                 if not math.isfinite(min_val):
                     raise ValueError(f"min for {target!r} must be finite")

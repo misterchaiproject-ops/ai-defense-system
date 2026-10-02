@@ -72,7 +72,7 @@ class Envelope:
             raise ValueError("invalid key_id")
         if not _SENDER_RE.match(self.sender_id):
             raise ValueError("invalid sender_id")
-        if isinstance(self.timestamp, bool) or not isinstance(self.timestamp, (int, float)):
+        if isinstance(self.timestamp, bool) or not isinstance(self.timestamp, int | float):
             raise TypeError("timestamp must be numeric")
         if not math.isfinite(self.timestamp):
             raise ValueError("timestamp must be finite")
@@ -127,13 +127,13 @@ class SecureAgentChannel:
         allowed_senders: frozenset[str] | None = None,
         max_delay_seconds: float = 5.0,
     ) -> None:
-        if not isinstance(shared_secret, (bytes, bytearray)):
+        if not isinstance(shared_secret, bytes | bytearray):
             raise TypeError("shared_secret must be bytes")
         if len(shared_secret) < _MIN_SECRET_BYTES:
             raise ValueError(f"shared_secret must be >= {_MIN_SECRET_BYTES} bytes")
         if not _SENDER_RE.match(key_id):
             raise ValueError("invalid key_id")
-        if isinstance(max_delay_seconds, bool) or not isinstance(max_delay_seconds, (int, float)):
+        if isinstance(max_delay_seconds, bool) or not isinstance(max_delay_seconds, int | float):
             raise TypeError("max_delay_seconds must be numeric")
         if not math.isfinite(max_delay_seconds) or not (0 < max_delay_seconds <= 300):
             raise ValueError("max_delay_seconds must be in (0, 300]")

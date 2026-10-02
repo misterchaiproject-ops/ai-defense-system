@@ -66,7 +66,7 @@ def _validate_value(value: object) -> None:
         return
     if isinstance(value, bool):
         raise TypeError("value must be a real number, not bool")
-    if not isinstance(value, (int, float)):
+    if not isinstance(value, int | float):
         raise TypeError(f"value must be int, float, or None, got {type(value).__name__}")
     if not math.isfinite(value):
         raise ValueError("value must be finite (no NaN, no Inf)")
