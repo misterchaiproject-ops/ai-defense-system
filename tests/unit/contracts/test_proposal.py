@@ -10,8 +10,11 @@ from __future__ import annotations
 import dataclasses
 import json
 import math
+from typing import cast
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from contracts.actions import Action
 from contracts.proposal import MAX_TARGET_LENGTH, Proposal
@@ -236,3 +239,85 @@ class TestProposalFailClosed:
         assert p1 == p2
         assert hash(p1) == hash(p2)
         assert {p1, p2} == {p1}
+
+
+# ============================================================
+# TestPropertyBased - Hypothesis
+# ============================================================
+
+
+class TestPropertyBased:
+    """Property-based tests using Hypothesis to explore edge cases."""
+
+    @given(
+        action=st.sampled_from(list(Action)),
+        target=st.text(
+            min_size=1,
+            max_size=MAX_TARGET_LENGTH,
+            alphabet=st.characters(blacklist_categories=("Cc", "Cf", "Cs", "Co")),
+        ).filter(lambda s: s.strip() != ""),
+        value=st.one_of(
+            st.none(),
+            st.floats(allow_nan=False, allow_infinity=False),
+            st.integers(),
+        ),
+    )
+    def test_roundtrip_preserves_proposal(
+        self, action: Action, target: str, value: float | int | None
+    ) -> None:
+        """Any valid Proposal must survive to_payload() -> rebuild."""
+        original = Proposal(action=action, target=target, value=value)
+        payload = original.to_payload()
+        rebuilt = Proposal(
+            action=Action(cast(str, payload["action"])),
+            target=cast(str, payload["target"]),
+            value=cast("float | None", payload["value"]),
+        )
+        assert rebuilt == original
+
+    @given(infinite=st.sampled_from([float("inf"), float("-inf")]))
+    def test_rejects_infinite_value(self, infinite: float) -> None:
+        """Infinite values must always be rejected (fail-closed)."""
+        with pytest.raises(ValueError, match="finite"):
+            Proposal(
+                action=Action.ADJUST_METRIC,
+                target="cooling_system",
+                value=infinite,
+            )
+
+    @given(bool_value=st.booleans())
+    def test_rejects_bool_value(self, bool_value: bool) -> None:
+        """Booleans must always be rejected (bool is subclass of int)."""
+        with pytest.raises(TypeError, match="bool"):
+            Proposal(
+                action=Action.ADJUST_METRIC,
+                target="cooling_system",
+                value=bool_value,
+            )
+
+    @given(
+        target=st.text(
+            min_size=MAX_TARGET_LENGTH + 1,
+            max_size=MAX_TARGET_LENGTH * 2,
+            alphabet=st.characters(blacklist_categories=("Cc", "Cf", "Cs", "Co")),
+        )
+    )
+    def test_rejects_overlong_target(self, target: str) -> None:
+        """Targets longer than MAX_TARGET_LENGTH must be rejected."""
+        with pytest.raises(ValueError, match="characters"):
+            Proposal(
+                action=Action.ADJUST_METRIC,
+                target=target,
+                value=0.0,
+            )
+
+    @given(control_char=st.sampled_from(["\x00", "\x01", "\x1f", "\x7f"]))
+    def test_rejects_control_chars_in_target(self, control_char: str) -> None:
+        """Control characters in target must be rejected (injection protection)."""
+        target = "a" + control_char + "b"
+        with pytest.raises(ValueError, match="control characters|whitespace-only"):
+            Proposal(
+                action=Action.ADJUST_METRIC,
+                target=target,
+                value=0.0,
+            )

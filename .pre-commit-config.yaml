@@ -22,6 +22,7 @@ repos:
         additional_dependencies:
           - pytest
           - types-requests
+          - hypothesis
         files: ^(src/|tests/)
 
   # Basic file hygiene
