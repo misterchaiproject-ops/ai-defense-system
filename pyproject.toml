@@ -39,6 +39,7 @@ addopts = "-v --tb=short --strict-markers"
 [tool.mypy]
 python_version = "3.12"
 strict = true
+mypy_path = "src"
 warn_unreachable = false
 warn_return_any = true
 disallow_untyped_defs = true
