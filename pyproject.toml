@@ -14,6 +14,7 @@ dev = [
     "mypy>=1.10",
     "ruff>=0.5",
     "bandit>=1.7",
+    "pre-commit>=3.7",
     "pip-audit>=2.7",
 ]
 
@@ -88,3 +89,10 @@ fail_under = 80
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
 skips = ["B101"]
+
+
+# ========================================
+# Pre-Commit Hooks
+# ========================================
+[tool.pre-commit]
+# Configuration for pre-commit framework

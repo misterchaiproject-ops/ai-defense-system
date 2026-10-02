@@ -109,3 +109,58 @@ Every contributor (human or AI) commits to:
 ---
 
 **End of Lessons Learned v1.0**
+
+---
+
+## Lesson 7: Frozen dataclasses with unhashable fields raise at hash time
+
+**What happened:** Added `metadata: MappingProxyType` to a
+`@dataclass(frozen=True)`. `test_is_hashable` failed with
+`TypeError: unhashable type: 'dict'`.
+
+**Why:** Python's `frozen=True` auto-generates `__hash__` that
+includes **all fields**. `MappingProxyType` wraps a dict, which is
+unhashable. The generated `__hash__` raises when called — not when
+the class is defined.
+
+**The fix:** Mark such fields with `field(hash=False)`:
+
+```python
+metadata: Mapping[str, Any] = field(
+    default_factory=lambda: MappingProxyType({}),
+    hash=False,  # excluded from __hash__ but still in __eq__
+)
+
+
+**Prevention:** Any `frozen=True` dataclass containing fields that
+are themselves unhashable (dicts, lists, sets, `MappingProxyType`)
+must mark those fields with `hash=False`.
+
+**Detection:** Always include a `test_<class>_is_hashable` test for
+any frozen dataclass.
+
+---
+
+## Lesson 8: Coverage path format matters
+
+**What happened:** `--cov=src.contracts.validation_result` returned
+0.00% coverage even though 30 tests passed.
+
+**Why:** With `pythonpath = ["src"]`, the runtime package name is
+`contracts`, not `src.contracts`. `--cov=src.contracts` treats it
+as a module path, not a package name.
+
+**The fix:** Use the runtime package name or a filesystem path:
+
+| Format | Type | Valid? |
+|--------|------|--------|
+| `--cov=contracts.validation_result` | Package name | YES |
+| `--cov=src/contracts` | Filesystem path | YES |
+| `--cov=src.contracts` | Wrong combination | NO |
+
+**Prevention:** Standardize on package names (no `src.` prefix) in
+all local coverage commands. Use filesystem paths in CI.
+
+---
+
+**End of Lessons Learned v1.2 (Lessons 7 + 8 added)**
