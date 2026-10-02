@@ -8,6 +8,7 @@ import time
 import pytest
 
 from channel.core import (
+    _MAX_PAYLOAD_BYTES,
     Envelope,
     SecureAgentChannel,
     _ReplayCache,
@@ -462,3 +463,41 @@ class TestChannelAdditional:
         result = channel.verify_message(fake)
         assert result.approved is False
         assert result.reason is ReasonCode.UNSUPPORTED_VERSION
+
+
+class TestCanonicalize:
+    """Test _canonicalize JSON serialization and size limits."""
+
+    def test_rejects_non_serializable_payload(self) -> None:
+        """Ensure ValueError is raised for non-serializable payloads (e.g., set)."""
+        with pytest.raises(ValueError, match="payload not serializable"):
+            SecureAgentChannel._canonicalize({"key": {1, 2, 3}})
+
+    def test_rejects_oversized_payload(self) -> None:
+        """Ensure ValueError is raised when payload exceeds _MAX_PAYLOAD_BYTES."""
+        oversized_data = {"data": "A" * (_MAX_PAYLOAD_BYTES + 1)}
+        with pytest.raises(ValueError, match="payload exceeds max size"):
+            SecureAgentChannel._canonicalize(oversized_data)
+
+
+class TestChannelErrorHandling:
+    """Test graceful handling of internal errors in verify_message."""
+
+    def test_verify_message_handles_internal_error(
+        self, channel: SecureAgentChannel, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Ensure internal errors return INTERNAL_ERROR (fail-closed)."""
+        # Create a valid message first
+        payload = {"action": "adjust_metric", "value": 60.0}
+        env = channel.create_message("Agent_A", payload)
+
+        # Simulate an internal error by breaking _canonicalize
+        def broken_canonicalize(payload: object) -> bytes:
+            raise RuntimeError("Simulated internal error")
+
+        monkeypatch.setattr(SecureAgentChannel, "_canonicalize", staticmethod(broken_canonicalize))
+
+        # verify_message must handle the error gracefully
+        result = channel.verify_message(env)
+        assert result.approved is False
+        assert result.reason is ReasonCode.INTERNAL_ERROR
