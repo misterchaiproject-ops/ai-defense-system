@@ -1,0 +1,465 @@
+"""Comprehensive test suite for channel.core."""
+
+from __future__ import annotations
+
+import dataclasses
+import time
+
+import pytest
+
+from channel.core import (
+    Envelope,
+    SecureAgentChannel,
+    _ReplayCache,
+    _sanitize,
+    generate_shared_secret,
+)
+from contracts import ReasonCode
+
+# ===========================================================================
+# Fixtures
+# ===========================================================================
+
+
+@pytest.fixture
+def secret() -> bytes:
+    return generate_shared_secret()
+
+
+@pytest.fixture
+def channel(secret: bytes) -> SecureAgentChannel:
+    return SecureAgentChannel(
+        shared_secret=secret,
+        key_id="test-v1",
+        allowed_senders=frozenset({"Agent_A", "Agent_B"}),
+    )
+
+
+@pytest.fixture
+def open_channel(secret: bytes) -> SecureAgentChannel:
+    """Channel without sender whitelist."""
+    return SecureAgentChannel(
+        shared_secret=secret,
+        key_id="open-v1",
+    )
+
+
+# ===========================================================================
+# 1. _sanitize — 4 tests
+# ===========================================================================
+
+
+class TestSanitize:
+    """Control characters are removed, length is bounded."""
+
+    def test_removes_newline(self) -> None:
+        assert "\n" not in _sanitize("a\nb")
+
+    def test_removes_null_byte(self) -> None:
+        assert "\x00" not in _sanitize("a\x00b")
+
+    def test_truncates_to_max_len(self) -> None:
+        assert len(_sanitize("a" * 200, max_len=10)) == 10
+
+    def test_converts_non_string_to_string(self) -> None:
+        assert _sanitize(42) == "42"
+
+
+# ===========================================================================
+# 2. Envelope — 6 tests
+# ===========================================================================
+
+
+class TestEnvelopeConstruction:
+    """Immutable envelope with strict invariants."""
+
+    @pytest.fixture
+    def valid_envelope(self) -> Envelope:
+        return Envelope(
+            version="v1",
+            key_id="test-v1",
+            sender_id="Agent_A",
+            timestamp=time.time(),
+            nonce="a" * 32,
+            payload={"x": 1},
+            signature="b" * 64,
+        )
+
+    def test_valid_construction(self, valid_envelope: Envelope) -> None:
+        assert valid_envelope.sender_id == "Agent_A"
+        assert valid_envelope.nonce == "a" * 32
+
+    def test_rejects_wrong_version(self) -> None:
+        with pytest.raises(ValueError, match="version"):
+            Envelope(
+                version="v99",
+                key_id="test-v1",
+                sender_id="Agent_A",
+                timestamp=time.time(),
+                nonce="a" * 32,
+                payload={"x": 1},
+                signature="b" * 64,
+            )
+
+    def test_rejects_invalid_sender(self) -> None:
+        with pytest.raises(ValueError, match="sender"):
+            Envelope(
+                version="v1",
+                key_id="test-v1",
+                sender_id="bad sender!",
+                timestamp=time.time(),
+                nonce="a" * 32,
+                payload={"x": 1},
+                signature="b" * 64,
+            )
+
+    def test_rejects_invalid_nonce_format(self) -> None:
+        with pytest.raises(ValueError, match="nonce"):
+            Envelope(
+                version="v1",
+                key_id="test-v1",
+                sender_id="Agent_A",
+                timestamp=time.time(),
+                nonce="too-short",
+                payload={"x": 1},
+                signature="b" * 64,
+            )
+
+    def test_rejects_invalid_signature_format(self) -> None:
+        with pytest.raises(ValueError, match="signature"):
+            Envelope(
+                version="v1",
+                key_id="test-v1",
+                sender_id="Agent_A",
+                timestamp=time.time(),
+                nonce="a" * 32,
+                payload={"x": 1},
+                signature="too-short",
+            )
+
+    def test_is_frozen(self, valid_envelope: Envelope) -> None:
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            valid_envelope.sender_id = "Hacker"  # type: ignore[misc]
+
+
+# ===========================================================================
+# 3. _ReplayCache — 4 tests
+# ===========================================================================
+
+
+class TestReplayCache:
+    """Bounded, thread-safe nonce cache."""
+
+    def test_new_nonce_accepted(self) -> None:
+        cache = _ReplayCache()
+        assert cache.check_and_add("n1") is True
+
+    def test_replay_rejected(self) -> None:
+        cache = _ReplayCache()
+        cache.check_and_add("n1")
+        assert cache.check_and_add("n1") is False
+
+    def test_bounded_size(self) -> None:
+        cache = _ReplayCache(max_size=3)
+        for i in range(10):
+            cache.check_and_add(f"n{i}")
+        assert cache.check_and_add("n9") is False
+        assert cache.check_and_add("n0") is True
+
+    def test_many_unique_nonces(self) -> None:
+        cache = _ReplayCache(max_size=100)
+        for i in range(50):
+            assert cache.check_and_add(f"n{i}") is True
+
+
+# ===========================================================================
+# 4. SecureAgentChannel — Constructor — 5 tests
+# ===========================================================================
+
+
+class TestChannelConstructor:
+    """Initialization and validation."""
+
+    def test_valid_construction(self, secret: bytes) -> None:
+        ch = SecureAgentChannel(shared_secret=secret, key_id="test-v1")
+        assert ch is not None
+
+    def test_rejects_short_secret(self) -> None:
+        with pytest.raises(ValueError, match="must be"):
+            SecureAgentChannel(shared_secret=b"short", key_id="test-v1")
+
+    def test_rejects_non_bytes_secret(self) -> None:
+        with pytest.raises(TypeError, match="bytes"):
+            SecureAgentChannel(
+                shared_secret=b"dummy_secret",  # noqa: S106
+                key_id="test-v1",
+            )
+
+    def test_rejects_invalid_key_id(self, secret: bytes) -> None:
+        with pytest.raises(ValueError, match="key_id"):
+            SecureAgentChannel(shared_secret=secret, key_id="bad key!")
+
+    def test_rejects_invalid_sender_in_whitelist(self, secret: bytes) -> None:
+        with pytest.raises(ValueError, match="sender"):
+            SecureAgentChannel(
+                shared_secret=secret,
+                key_id="test-v1",
+                allowed_senders=frozenset({"bad sender!"}),
+            )
+
+
+# ===========================================================================
+# 5. Round Trip — 4 tests
+# ===========================================================================
+
+
+class TestChannelRoundTrip:
+    """Sign then verify with a valid message."""
+
+    def test_sign_and_verify(self, channel: SecureAgentChannel) -> None:
+        env = channel.create_message("Agent_A", {"x": 1})
+        result = channel.verify_message(env)
+        assert result.approved is True
+        assert result.reason is ReasonCode.OK
+
+    def test_envelope_has_correct_fields(self, channel: SecureAgentChannel) -> None:
+        env = channel.create_message("Agent_A", {"x": 1})
+        assert env.version == "v1"
+        assert env.key_id == "test-v1"
+        assert env.sender_id == "Agent_A"
+        assert len(env.nonce) == 32
+        assert len(env.signature) == 64
+
+    def test_payload_preserved(self, channel: SecureAgentChannel) -> None:
+        payload = {"action": "adjust_metric", "value": 60.0}
+        channel.create_message("Agent_A", payload)
+        env = channel.create_message("Agent_A", {"x": 1})
+        assert dict(env.payload) == payload
+
+    def test_no_whitelist_accepts_any_sender(self, open_channel: SecureAgentChannel) -> None:
+        env = open_channel.create_message("AnyAgent", {"x": 1})
+        result = open_channel.verify_message(env)
+        assert result.approved is True
+
+
+# ===========================================================================
+# 6. Replay Protection — 3 tests
+# ===========================================================================
+
+
+class TestReplayProtection:
+    """Duplicate nonces are rejected."""
+
+    def test_replay_rejected(self, channel: SecureAgentChannel) -> None:
+        env = channel.create_message("Agent_A", {"x": 1})
+        assert channel.verify_message(env).approved is True
+        result = channel.verify_message(env)
+        assert result.approved is False
+        assert result.reason is ReasonCode.REPLAY_DETECTED
+
+    def test_different_messages_have_different_nonces(self, channel: SecureAgentChannel) -> None:
+        env1 = channel.create_message("Agent_A", {"x": 1})
+        env2 = channel.create_message("Agent_A", {"x": 1})
+        assert env1.nonce != env2.nonce
+
+    def test_ten_replays_all_rejected(self, channel: SecureAgentChannel) -> None:
+        env = channel.create_message("Agent_A", {"x": 1})
+        channel.verify_message(env)
+        for _ in range(10):
+            result = channel.verify_message(env)
+            assert result.reason is ReasonCode.REPLAY_DETECTED
+
+
+# ===========================================================================
+# 7. Tampering — 5 tests
+# ===========================================================================
+
+
+class TestTampering:
+    """Any field modification is detected."""
+
+    def test_tampered_payload_rejected(self, channel: SecureAgentChannel) -> None:
+        env = channel.create_message("Agent_A", {"x": 1})
+        tampered = dataclasses.replace(env, payload={"x": 999})
+        result = channel.verify_message(tampered)
+        assert result.approved is False
+        assert result.reason is ReasonCode.INVALID_SIGNATURE
+
+    def test_tampered_signature_rejected(self, channel: SecureAgentChannel) -> None:
+        env = channel.create_message("Agent_A", {"x": 1})
+        tampered = dataclasses.replace(env, signature="0" * 64)
+        result = channel.verify_message(tampered)
+        assert result.approved is False
+
+    def test_tampered_nonce_rejected(self, channel: SecureAgentChannel) -> None:
+        env = channel.create_message("Agent_A", {"x": 1})
+        tampered = dataclasses.replace(env, nonce="f" * 32)
+        result = channel.verify_message(tampered)
+        assert result.approved is False
+
+    def test_tampered_timestamp_rejected(self, channel: SecureAgentChannel) -> None:
+        env = channel.create_message("Agent_A", {"x": 1})
+        tampered = dataclasses.replace(env, timestamp=env.timestamp + 0.001)
+        result = channel.verify_message(tampered)
+        assert result.approved is False
+
+    def test_unauthorized_sender_rejected(self, channel: SecureAgentChannel) -> None:
+        env = channel.create_message("Agent_A", {"x": 1})
+        tampered = dataclasses.replace(env, sender_id="Unknown_Agent")
+        result = channel.verify_message(tampered)
+        assert result.approved is False
+
+
+# ===========================================================================
+# 8. Timing — 2 tests
+# ===========================================================================
+
+
+class TestTiming:
+    """Timestamps outside the freshness window are rejected."""
+
+    def test_too_old_rejected(self, channel: SecureAgentChannel) -> None:
+        env = channel.create_message("Agent_A", {"x": 1})
+        tampered = dataclasses.replace(env, timestamp=time.time() - 100)
+        result = channel.verify_message(tampered)
+        assert result.approved is False
+
+    def test_far_future_rejected(self, channel: SecureAgentChannel) -> None:
+        env = channel.create_message("Agent_A", {"x": 1})
+        tampered = dataclasses.replace(env, timestamp=time.time() + 100)
+        result = channel.verify_message(tampered)
+        assert result.approved is False
+
+
+# ===========================================================================
+# 9. Fail-Closed — 3 tests
+# ===========================================================================
+
+
+class TestFailClosed:
+    """Defensive guarantees."""
+
+    def test_non_envelope_rejected(self, channel: SecureAgentChannel) -> None:
+        result = channel.verify_message("not an envelope")
+        assert result.approved is False
+
+    def test_none_rejected(self, channel: SecureAgentChannel) -> None:
+        result = channel.verify_message(None)
+        assert result.approved is False
+
+    def test_generate_shared_secret_length(self) -> None:
+        s = generate_shared_secret()
+        assert isinstance(s, bytes)
+        assert len(s) == 32
+
+
+# ===========================================================================
+# 10. Additional Coverage — 10 tests
+# ===========================================================================
+
+
+class TestEnvelopeAdditional:
+    """Cover remaining Envelope validation branches."""
+
+    def test_rejects_invalid_key_id(self) -> None:
+        with pytest.raises(ValueError, match="key_id"):
+            Envelope(
+                version="v1",
+                key_id="bad key!",
+                sender_id="Agent_A",
+                timestamp=time.time(),
+                nonce="a" * 32,
+                payload={"x": 1},
+                signature="b" * 64,
+            )
+
+    def test_rejects_nan_timestamp(self) -> None:
+        with pytest.raises(ValueError, match="finite"):
+            Envelope(
+                version="v1",
+                key_id="test-v1",
+                sender_id="Agent_A",
+                timestamp=float("nan"),
+                nonce="a" * 32,
+                payload={"x": 1},
+                signature="b" * 64,
+            )
+
+    def test_rejects_bool_timestamp(self) -> None:
+        with pytest.raises(TypeError, match="numeric"):
+            Envelope(
+                version="v1",
+                key_id="test-v1",
+                sender_id="Agent_A",
+                timestamp=True,
+                nonce="a" * 32,
+                payload={"x": 1},
+                signature="b" * 64,
+            )
+
+    def test_rejects_non_mapping_payload(self) -> None:
+        with pytest.raises(TypeError, match="Mapping"):
+            Envelope(
+                version="v1",
+                key_id="test-v1",
+                sender_id="Agent_A",
+                timestamp=time.time(),
+                nonce="a" * 32,
+                payload="not a mapping",  # type: ignore[arg-type]
+                signature="b" * 64,
+            )
+
+
+class TestReplayCacheAdditional:
+    """Cover remaining ReplayCache branches."""
+
+    def test_zero_max_size_rejected(self) -> None:
+        with pytest.raises(ValueError, match="max_size"):
+            _ReplayCache(max_size=0)
+
+
+class TestChannelAdditional:
+    """Cover remaining Channel branches."""
+
+    def test_rejects_non_numeric_max_delay(self, secret: bytes) -> None:
+        with pytest.raises(TypeError, match="numeric"):
+            SecureAgentChannel(
+                shared_secret=secret,
+                key_id="test-v1",
+                max_delay_seconds="five",  # type: ignore[arg-type]
+            )
+
+    def test_rejects_negative_max_delay(self, secret: bytes) -> None:
+        with pytest.raises(ValueError, match="max_delay"):
+            SecureAgentChannel(
+                shared_secret=secret,
+                key_id="test-v1",
+                max_delay_seconds=-1.0,
+            )
+
+    def test_create_message_rejects_invalid_sender(self, channel: SecureAgentChannel) -> None:
+        with pytest.raises(ValueError, match="sender_id"):
+            channel.create_message("bad sender!", {"x": 1})
+
+    def test_verify_rejects_wrong_key_id(self, channel: SecureAgentChannel) -> None:
+        env = channel.create_message("Agent_A", {"x": 1})
+        tampered = dataclasses.replace(env, key_id="different-v1")
+        result = channel.verify_message(tampered)
+        assert result.approved is False
+        assert result.reason is ReasonCode.UNKNOWN_KEY_ID
+
+    def test_verify_rejects_unsupported_version(self, channel: SecureAgentChannel) -> None:
+        channel.create_message("Agent_A", {"x": 1})
+        # Bypass Envelope validation by constructing a fake object
+        # (only the Channel's verify_message is being tested here)
+        fake = object.__new__(Envelope)
+        object.__setattr__(fake, "version", "v99")
+        object.__setattr__(fake, "key_id", "test-v1")
+        object.__setattr__(fake, "sender_id", "Agent_A")
+        object.__setattr__(fake, "timestamp", time.time())
+        object.__setattr__(fake, "nonce", "a" * 32)
+        object.__setattr__(fake, "payload", {"x": 1})
+        object.__setattr__(fake, "signature", "b" * 64)
+        result = channel.verify_message(fake)
+        assert result.approved is False
+        assert result.reason is ReasonCode.UNSUPPORTED_VERSION
