@@ -191,7 +191,7 @@ class TestChannelConstructor:
     def test_rejects_non_bytes_secret(self) -> None:
         with pytest.raises(TypeError, match="bytes"):
             SecureAgentChannel(
-                shared_secret=b"dummy_secret",  # noqa: S106
+                shared_secret="dummy_secret" * 3,  # type: ignore[arg-type]  # noqa: S106
                 key_id="test-v1",
             )
 
@@ -232,8 +232,7 @@ class TestChannelRoundTrip:
 
     def test_payload_preserved(self, channel: SecureAgentChannel) -> None:
         payload = {"action": "adjust_metric", "value": 60.0}
-        channel.create_message("Agent_A", payload)
-        env = channel.create_message("Agent_A", {"x": 1})
+        env = channel.create_message("Agent_A", payload)
         assert dict(env.payload) == payload
 
     def test_no_whitelist_accepts_any_sender(self, open_channel: SecureAgentChannel) -> None:
