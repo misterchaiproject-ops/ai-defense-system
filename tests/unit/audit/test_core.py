@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 from pathlib import Path
 
 import pytest
@@ -257,3 +258,58 @@ class TestSecureAuditLogIntegrity:
         log_path.write_bytes(data[:-10])
         with pytest.raises(IntegrityError):
             audit_log.read_all()
+
+
+class TestSecureAuditLogHardening:
+    """Tests for thread safety and nonce uniqueness (G5 hardening)."""
+
+    def test_concurrent_appends_no_corruption(self, audit_log: SecureAuditLog) -> None:
+        """Concurrent appends from 5 threads do not corrupt records."""
+
+        def worker(thread_id: int) -> None:
+            for i in range(10):
+                audit_log.append(
+                    AuditEvent(
+                        event_type=f"T{thread_id}_E{i}",
+                        timestamp=float(thread_id * 100 + i),
+                        agent_id="A",
+                        details={"t": thread_id, "i": i},
+                    )
+                )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            futures = [pool.submit(worker, tid) for tid in range(5)]
+            for fut in futures:
+                fut.result()
+
+        events = audit_log.read_all()
+        assert len(events) == 50
+        event_types = [e.event_type for e in events]
+        assert len(set(event_types)) == 50
+
+    def test_nonces_are_unique_across_appends(
+        self, audit_log: SecureAuditLog, log_path: Path
+    ) -> None:
+        """Each appended record uses a distinct 12-byte nonce."""
+        for i in range(50):
+            audit_log.append(
+                AuditEvent(
+                    event_type="NONCE_TEST",
+                    timestamp=float(i),
+                    agent_id="A",
+                    details={"i": i},
+                )
+            )
+
+        data = log_path.read_bytes()
+        nonces: list[bytes] = []
+        offset = 0
+        while offset < len(data):
+            length = int.from_bytes(data[offset : offset + 4], "big")
+            offset += 4
+            payload_start = offset
+            nonces.append(data[payload_start : payload_start + 12])
+            offset = payload_start + length
+
+        assert len(nonces) == 50
+        assert len(set(nonces)) == 50
