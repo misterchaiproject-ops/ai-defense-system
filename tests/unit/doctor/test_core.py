@@ -16,6 +16,7 @@ from doctor.core import (
     check_precommit_cache,
     check_python_version,
     check_uv_lock,
+    cleanup_caches,
     run_all,
 )
 
@@ -223,3 +224,32 @@ class TestDoctorCLI:
         with pytest.raises(SystemExit) as exc:
             main(["--help"])
         assert exc.value.code == 0
+
+
+def test_check_orphan_bak_detected(tmp_path: Path) -> None:
+    src_dir = tmp_path / "src"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    bak_file = src_dir / "vulnerable_code.py.bak"
+    bak_file.touch()
+    result = check_orphan_bak(tmp_path)
+    assert result.status == "ERROR"
+    assert "orphan .bak file" in result.detail
+
+
+def test_check_orphan_bak_clean(tmp_path: Path) -> None:
+    src_dir = tmp_path / "src"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    result = check_orphan_bak(tmp_path)
+    assert result.status == "OK"
+    assert "no orphan .bak files" in result.detail
+
+
+def test_cleanup_caches_removes_stale_folders(tmp_path: Path) -> None:
+    pytest_cache = tmp_path / ".pytest_cache"
+    mypy_cache = tmp_path / ".mypy_cache"
+    pytest_cache.mkdir()
+    mypy_cache.mkdir()
+    removed_count = cleanup_caches(tmp_path)
+    assert removed_count >= 2
+    assert not pytest_cache.exists()
+    assert not mypy_cache.exists()
