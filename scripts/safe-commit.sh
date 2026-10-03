@@ -46,9 +46,18 @@ BODY="${2:-}"
 echo ">> Step 1/5: Pre-flight"
 
 BAK_FILES=$(find . -name '*.bak' -not -path './.git/*' 2>/dev/null || true)
-if [ -n "$BAK_FILES" ]; then
-    echo "ERROR: found .bak files (remove before committing):"
-    echo "$BAK_FILES"
+
+# Blocklist: refuse accidental files
+BLOCKED_FILES=""
+for pattern in '^=$' '\.swp$' '~$' '\.DS_Store$' '\.orig$' '\.tmp$'; do
+    matches=$(git status --porcelain | awk '{print $2}' | grep -E "$pattern" || true)
+    if [ -n "$matches" ]; then
+        BLOCKED_FILES="${BLOCKED_FILES}${matches}"$'\n'
+    fi
+done
+if [ -n "$BLOCKED_FILES" ]; then
+    echo "ERROR: found accidental file(s) that must not be committed:"
+    echo "$BLOCKED_FILES"
     exit 1
 fi
 
@@ -56,7 +65,11 @@ if [ -z "$(git status --porcelain)" ]; then
     echo "ERROR: no changes to commit (working tree clean)."
     exit 1
 fi
-echo " OK: no .bak files, changes detected"
+if [ -n "$BAK_FILES" ]; then
+    echo " OK: detected .bak files (will auto-clean after verify)"
+else
+    echo " OK: no .bak files, changes detected"
+fi
 
 # --- Step 2/5: Auto-fix ---
 echo ""
@@ -70,8 +83,19 @@ fi
 echo ""
 echo ">> Step 3/5: Verify"
 if ! ./scripts/check.sh; then
-    echo "ERROR: check.sh failed"
+    echo "ERROR: check.sh failed (.bak files kept for rollback)"
     exit 1
+fi
+
+# Auto-cleanup .bak files (only on success, only if not dry-run)
+if [ -n "$BAK_FILES" ] && [ "$DRY_RUN" -eq 0 ]; then
+    echo ""
+    echo ">> Auto-cleanup: removing .bak files"
+    while IFS= read -r f; do
+        if [ -n "$f" ]; then
+            rm -f "$f" && echo "   removed: $f"
+        fi
+    done <<< "$BAK_FILES"
 fi
 
 if [ "$DRY_RUN" -eq 1 ]; then
