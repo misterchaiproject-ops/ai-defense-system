@@ -13,7 +13,7 @@ test:
 	@uv run pytest -v
 
 cov:
-	@uv run pytest --cov=contracts --cov=guardrail --cov=channel --cov=orchestrator --cov-report=term-missing
+	@uv run pytest --cov=contracts --cov=guardrail --cov=channel --cov=orchestrator --cov-report=term-missing --cov-fail-under=80
 
 clean:
 	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
