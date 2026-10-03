@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from doctor.__main__ import main
 from doctor.core import (
     CheckResult,
     check_caches,
@@ -156,3 +157,69 @@ class TestRunAll:
         """Every result is a CheckResult."""
         results = run_all(tmp_path)
         assert all(isinstance(r, CheckResult) for r in results)
+
+
+class TestDoctorCLI:
+    """Tests for doctor.__main__ CLI entry point."""
+
+    def test_main_healthy_root_returns_zero(self, healthy_root: Path) -> None:
+        """A healthy root exits with code 0."""
+        (healthy_root / ".cache").mkdir()
+        assert main(["--root", str(healthy_root)]) == 0
+
+    def test_main_missing_lock_returns_one(self, tmp_path: Path) -> None:
+        """Missing uv.lock causes non-zero exit."""
+        assert main(["--root", str(tmp_path)]) == 1
+
+    def test_main_output_contains_report_header(
+        self, healthy_root: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """CLI prints the report header."""
+        main(["--root", str(healthy_root)])
+        out = capsys.readouterr().out
+        assert "AI Defense System: Environment Doctor" in out
+        assert "SUMMARY:" in out
+
+    def test_main_fix_triggers_cleanup(
+        self, healthy_root: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """--fix removes stale caches and prints CLEANUP line."""
+        (healthy_root / ".pytest_cache").mkdir()
+        (healthy_root / ".mypy_cache").mkdir()
+        main(["--root", str(healthy_root), "--fix"])
+        out = capsys.readouterr().out
+        assert "CLEANUP:" in out
+        assert not (healthy_root / ".pytest_cache").exists()
+        assert not (healthy_root / ".mypy_cache").exists()
+
+    def test_main_no_fix_does_not_cleanup(self, healthy_root: Path) -> None:
+        """Without --fix, caches are preserved."""
+        (healthy_root / ".pytest_cache").mkdir()
+        main(["--root", str(healthy_root)])
+        assert (healthy_root / ".pytest_cache").exists()
+
+    def test_main_fix_reports_singular(
+        self, healthy_root: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """--fix reports '1 cache directory' (singular)."""
+        (healthy_root / ".pytest_cache").mkdir()
+        main(["--root", str(healthy_root), "--fix"])
+        out = capsys.readouterr().out
+        assert "1 cache directory" in out
+        assert "directories" not in out.split("CLEANUP:")[1].split("\n")[0]
+
+    def test_main_fix_reports_plural(
+        self, healthy_root: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """--fix reports 'N cache directories' (plural)."""
+        (healthy_root / ".pytest_cache").mkdir()
+        (healthy_root / ".mypy_cache").mkdir()
+        main(["--root", str(healthy_root), "--fix"])
+        out = capsys.readouterr().out
+        assert "2 cache directories" in out
+
+    def test_main_help_raises_system_exit(self) -> None:
+        """--help triggers argparse SystemExit(0)."""
+        with pytest.raises(SystemExit) as exc:
+            main(["--help"])
+        assert exc.value.code == 0
