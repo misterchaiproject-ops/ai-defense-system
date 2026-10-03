@@ -79,7 +79,7 @@ ignore = [
 # coverage
 # ========================================
 [tool.coverage.run]
-source = ["contracts", "guardrail", "channel", "orchestrator"]
+source = ["contracts", "guardrail", "channel", "orchestrator", "audit"]
 branch = true
 
 [tool.coverage.report]
