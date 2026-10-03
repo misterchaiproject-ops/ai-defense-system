@@ -160,6 +160,7 @@ class SecureAgentChannel:
         max_delay_seconds: float = 300,
         key_ring: Mapping[str, bytes] | None = None,
         active_key_id: str | None = None,
+        db_path: Path | str | None = None,
     ) -> None:
         if key_ring is not None and (shared_secret is not None or key_id is not None):
             raise ValueError("shared_secret/key_id and key_ring are mutually exclusive")
@@ -208,7 +209,7 @@ class SecureAgentChannel:
 
         self._allowed = allowed_senders
         self._max_delay = float(max_delay_seconds)
-        self._replay = _ReplayCache()
+        self._replay = _ReplayCache(db_path=db_path)
 
     # ------------------------------------------------------------------
     # Create

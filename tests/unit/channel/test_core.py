@@ -633,3 +633,71 @@ class TestKeyRotation:
                 key_ring={"key-v1": secret},
                 active_key_id="key-v1",
             )
+
+
+# =============================================================================
+# TestChannelG1Wiring - SQLite persistence wired through SecureAgentChannel
+# =============================================================================
+
+
+class TestChannelG1Wiring:
+    """Tests for db_path wiring from SecureAgentChannel to _ReplayCache."""
+
+    def test_channel_db_path_creates_file(self, secret: bytes, tmp_path: Path) -> None:
+        """A channel configured with db_path creates the SQLite file."""
+        db_file = tmp_path / "channel_replay.db"
+        ch = SecureAgentChannel(
+            shared_secret=secret,
+            key_id="wire-v1",
+            db_path=db_file,
+        )
+        env = ch.create_message(
+            "Agent_A",
+            {"action": "adjust_metric", "value": 10.0},
+        )
+        assert ch.verify_message(env).approved is True
+        assert db_file.exists()
+
+    def test_channel_persistence_across_instances(self, secret: bytes, tmp_path: Path) -> None:
+        """Replay detection persists across instances sharing db_path."""
+        db_file = tmp_path / "channel_persist.db"
+
+        sender = SecureAgentChannel(
+            shared_secret=secret,
+            key_id="wire-v1",
+            db_path=db_file,
+        )
+        env = sender.create_message(
+            "Agent_A",
+            {"action": "adjust_metric", "value": 10.0},
+        )
+
+        verifier1 = SecureAgentChannel(
+            shared_secret=secret,
+            key_id="wire-v1",
+            db_path=db_file,
+        )
+        assert verifier1.verify_message(env).approved is True
+
+        verifier2 = SecureAgentChannel(
+            shared_secret=secret,
+            key_id="wire-v1",
+            db_path=db_file,
+        )
+        result = verifier2.verify_message(env)
+        assert result.approved is False
+        assert result.reason is ReasonCode.REPLAY_DETECTED
+
+    def test_channel_default_db_path_isolated(self, secret: bytes) -> None:
+        """Two default channels do not share replay state."""
+        sender = SecureAgentChannel(shared_secret=secret, key_id="wire-v1")
+        env = sender.create_message(
+            "Agent_A",
+            {"action": "adjust_metric", "value": 10.0},
+        )
+
+        ch1 = SecureAgentChannel(shared_secret=secret, key_id="wire-v1")
+        ch2 = SecureAgentChannel(shared_secret=secret, key_id="wire-v1")
+
+        assert ch1.verify_message(env).approved is True
+        assert ch2.verify_message(env).approved is True
