@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,21 +40,43 @@ def check_python_version() -> CheckResult:
     )
 
 
+def _uv_lock_is_synced(root: Path) -> bool:
+    """Run 'uv lock --check' and return True if in sync.
+
+    Fail-Closed: any subprocess error is treated as out-of-sync (STALE).
+    """
+    uv = shutil.which("uv")
+    if uv is None:
+        return False
+    try:
+        # S603: args is a fixed list (no shell), uv resolved via shutil.which.
+        result = subprocess.run(  # noqa: S603
+            [uv, "lock", "--check"],
+            cwd=root,
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
 def check_uv_lock(root: Path) -> CheckResult:
-    """Verify uv.lock exists and is not older than pyproject.toml."""
+    """Verify uv.lock exists and is in sync with pyproject.toml."""
     lock = root / "uv.lock"
-    pyproject = root / "pyproject.toml"
 
     if not lock.exists():
         return CheckResult("uv_lock", "ERROR", "uv.lock not found")
 
-    if pyproject.exists() and lock.stat().st_mtime < pyproject.stat().st_mtime:
-        return CheckResult(
-            "uv_lock",
-            "STALE",
-            "pyproject.toml is newer than uv.lock (run: uv lock)",
-        )
-    return CheckResult("uv_lock", "OK", "lock is in sync")
+    if _uv_lock_is_synced(root):
+        return CheckResult("uv_lock", "OK", "lock is in sync")
+
+    return CheckResult(
+        "uv_lock",
+        "STALE",
+        "lock is out of sync (run: uv lock)",
+    )
 
 
 def check_precommit_cache() -> CheckResult:

@@ -52,11 +52,17 @@ class TestCheckPythonVersion:
 
 
 class TestCheckUvLock:
-    """Tests for check_uv_lock."""
+    """Tests for check_uv_lock (subprocess-based, no mtime)."""
 
-    def test_ok_when_lock_is_newer(self, healthy_root: Path) -> None:
-        """uv.lock newer than pyproject.toml -> OK."""
-        result = check_uv_lock(healthy_root)
+    def test_ok_when_lock_is_synced(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """In-sync lock returns OK."""
+        (tmp_path / "uv.lock").write_text("version = 1\n")
+        monkeypatch.setattr(
+            "doctor.core._uv_lock_is_synced",
+            lambda root: True,
+        )
+        result = check_uv_lock(tmp_path)
+        assert result.name == "uv_lock"
         assert result.status == "OK"
 
     def test_error_when_lock_missing(self, tmp_path: Path) -> None:
@@ -66,14 +72,35 @@ class TestCheckUvLock:
         assert result.status == "ERROR"
         assert "uv.lock" in result.detail.lower()
 
-    def test_stale_when_pyproject_newer(self, tmp_path: Path) -> None:
-        """pyproject newer than uv.lock -> STALE."""
-        lock = tmp_path / "uv.lock"
-        pyproj = tmp_path / "pyproject.toml"
-        lock.write_text("x")
-        pyproj.write_text("y")
-        os.utime(lock, (1000, 1000))
-        os.utime(pyproj, (2000, 2000))
+    def test_stale_when_out_of_sync(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Out-of-sync lock (subprocess returns non-zero) -> STALE."""
+        (tmp_path / "uv.lock").write_text("version = 1\n")
+        monkeypatch.setattr(
+            "doctor.core._uv_lock_is_synced",
+            lambda root: False,
+        )
+        result = check_uv_lock(tmp_path)
+        assert result.status == "STALE"
+        assert "uv lock" in result.detail.lower()
+
+    def test_stale_when_uv_missing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """uv not found in PATH -> STALE (fail-closed)."""
+        (tmp_path / "uv.lock").write_text("version = 1\n")
+
+        monkeypatch.setattr("doctor.core.shutil.which", lambda name: None)
+        result = check_uv_lock(tmp_path)
+        assert result.status == "STALE"
+
+    def test_stale_when_uv_timeout(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """TimeoutExpired from subprocess -> STALE (fail-closed)."""
+        import subprocess
+
+        (tmp_path / "uv.lock").write_text("version = 1\n")
+
+        def raise_timeout(*args: object, **kwargs: object) -> None:
+            raise subprocess.TimeoutExpired(cmd="uv", timeout=10)
+
+        monkeypatch.setattr("doctor.core.subprocess.run", raise_timeout)
         result = check_uv_lock(tmp_path)
         assert result.status == "STALE"
 
