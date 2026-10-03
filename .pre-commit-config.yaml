@@ -18,11 +18,12 @@ repos:
     rev: v1.11.2
     hooks:
       - id: mypy
-        args: [--strict, --config-file=pyproject.toml]
+        args: [--strict, --config-file=pyproject.toml, --explicit-package-bases]
         additional_dependencies:
           - pytest
           - types-requests
           - hypothesis
+          - cryptography
         files: ^(src/|tests/)
 
   # Basic file hygiene

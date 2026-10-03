@@ -10,7 +10,7 @@ echo "  1. Formatting code (ruff format)..."
 uv run ruff format .
 
 echo "  2. Auto-fixing lints (ruff check --fix)..."
-uv run ruff check --fix .
+uv run ruff check --fix --unsafe-fixes .
 
 echo "  3. Verifying no safe fixes remain (ruff check)..."
 uv run ruff check .
