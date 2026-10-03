@@ -45,7 +45,16 @@ else
 fi
 
 echo ""
-echo "[5/5] pytest (tests)..."
+echo "[5/6] ruff format --check (formatting)..."
+if ! uv run ruff format --check src/contracts src/guardrail src/channel src/orchestrator tests; then
+    echo " FAIL: Fix with ./scripts/fix.sh"
+    FAILED=1
+else
+    echo " OK: Clean"
+fi
+
+echo ""
+echo "[6/6] pytest (tests)..."
 if ! uv run pytest -q; then
     echo "  FAIL: Tests failed"
     FAILED=1
