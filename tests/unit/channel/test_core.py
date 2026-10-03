@@ -549,3 +549,87 @@ class TestReplayCachePersistence:
         cache = _ReplayCache(db_path=db_file)
         cache.check_and_add("first")
         assert db_file.exists()
+
+
+# =============================================================================
+# TestKeyRotation - Key ring support with legacy backward compatibility
+# =============================================================================
+
+
+class TestKeyRotation:
+    """Tests for key rotation (key_ring + active_key_id)."""
+
+    def test_legacy_single_key_still_works(self, secret: bytes) -> None:
+        """Legacy single-key construction remains functional."""
+        ch = SecureAgentChannel(
+            shared_secret=secret,
+            key_id="legacy-v1",
+        )
+        env = ch.create_message(
+            "Agent_A",
+            {"action": "adjust_metric", "value": 10.0},
+        )
+        assert env.key_id == "legacy-v1"
+        assert ch.verify_message(env).approved is True
+
+    def test_active_key_used_for_signing(self, secret: bytes) -> None:
+        """Messages are signed with the active key from the ring."""
+        key_ring = {
+            "key-v1": secret,
+            "key-v2": generate_shared_secret(),
+        }
+        ch = SecureAgentChannel(
+            key_ring=key_ring,
+            active_key_id="key-v2",
+        )
+        env = ch.create_message(
+            "Agent_A",
+            {"action": "adjust_metric", "value": 10.0},
+        )
+        assert env.key_id == "key-v2"
+
+    def test_old_key_envelope_still_verified(self, secret: bytes) -> None:
+        """Envelopes signed with an older ring key are still verified."""
+        key_ring = {
+            "key-v1": secret,
+            "key-v2": generate_shared_secret(),
+        }
+        old_ch = SecureAgentChannel(
+            key_ring=key_ring,
+            active_key_id="key-v1",
+        )
+        env = old_ch.create_message(
+            "Agent_A",
+            {"action": "adjust_metric", "value": 10.0},
+        )
+        new_ch = SecureAgentChannel(
+            key_ring=key_ring,
+            active_key_id="key-v2",
+        )
+        result = new_ch.verify_message(env)
+        assert result.approved is True
+
+    def test_unknown_key_rejected(self, secret: bytes) -> None:
+        """Envelopes with an unknown key_id are rejected."""
+        ch = SecureAgentChannel(
+            key_ring={"key-v1": secret},
+            active_key_id="key-v1",
+        )
+        env = ch.create_message(
+            "Agent_A",
+            {"action": "adjust_metric", "value": 10.0},
+        )
+        tampered = dataclasses.replace(env, key_id="unknown-key")
+        result = ch.verify_message(tampered)
+        assert result.approved is False
+        assert result.reason is ReasonCode.UNKNOWN_KEY_ID
+
+    def test_ambiguous_args_rejected(self, secret: bytes) -> None:
+        """Passing both shared_secret and key_ring raises ValueError."""
+        with pytest.raises(ValueError, match="key_ring"):
+            SecureAgentChannel(
+                shared_secret=secret,
+                key_id="legacy-v1",
+                key_ring={"key-v1": secret},
+                active_key_id="key-v1",
+            )

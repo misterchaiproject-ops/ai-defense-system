@@ -154,18 +154,48 @@ class SecureAgentChannel:
 
     def __init__(
         self,
-        shared_secret: bytes,
-        *,
-        key_id: str = "default-v1",
+        shared_secret: bytes | None = None,
+        key_id: str | None = None,
         allowed_senders: frozenset[str] | None = None,
-        max_delay_seconds: float = 5.0,
+        max_delay_seconds: float = 300,
+        key_ring: Mapping[str, bytes] | None = None,
+        active_key_id: str | None = None,
     ) -> None:
-        if not isinstance(shared_secret, bytes | bytearray):
-            raise TypeError("shared_secret must be bytes")
-        if len(shared_secret) < _MIN_SECRET_BYTES:
-            raise ValueError(f"shared_secret must be >= {_MIN_SECRET_BYTES} bytes")
-        if not _SENDER_RE.match(key_id):
-            raise ValueError("invalid key_id")
+        if key_ring is not None and (shared_secret is not None or key_id is not None):
+            raise ValueError("shared_secret/key_id and key_ring are mutually exclusive")
+
+        if key_ring is not None:
+            if not key_ring:
+                raise ValueError("key_ring must not be empty")
+            if active_key_id is None:
+                raise ValueError("active_key_id is required with key_ring")
+            if active_key_id not in key_ring:
+                raise ValueError(f"active_key_id {active_key_id!r} not present in key_ring")
+            validated_ring: dict[str, bytes] = {}
+            for kid, sec in key_ring.items():
+                if not _SENDER_RE.match(kid):
+                    raise ValueError(f"invalid key_id: {kid!r}")
+                if not isinstance(sec, bytes):
+                    raise TypeError(f"secret for {kid!r} must be bytes")
+                if len(sec) < _MIN_SECRET_BYTES:
+                    raise ValueError(f"secret for {kid!r} must be >= {_MIN_SECRET_BYTES} bytes")
+                validated_ring[kid] = bytes(sec)
+            self._key_ring = validated_ring
+            self._key_id = active_key_id
+        else:
+            if shared_secret is None or key_id is None:
+                raise ValueError(
+                    "shared_secret and key_id are required when key_ring is not provided"
+                )
+            if not isinstance(shared_secret, bytes):
+                raise TypeError("shared_secret must be bytes")
+            if len(shared_secret) < _MIN_SECRET_BYTES:
+                raise ValueError(f"shared_secret must be >= {_MIN_SECRET_BYTES} bytes")
+            if not _SENDER_RE.match(key_id):
+                raise ValueError("invalid key_id")
+            self._key_ring = {key_id: bytes(shared_secret)}
+            self._key_id = key_id
+
         if isinstance(max_delay_seconds, bool) or not isinstance(max_delay_seconds, int | float):
             raise TypeError("max_delay_seconds must be numeric")
         if not math.isfinite(max_delay_seconds) or not (0 < max_delay_seconds <= 300):
@@ -176,8 +206,6 @@ class SecureAgentChannel:
                 if not isinstance(s, str) or not _SENDER_RE.match(s):
                     raise ValueError(f"invalid sender: {s!r}")
 
-        self._secret = bytes(shared_secret)
-        self._key_id = key_id
         self._allowed = allowed_senders
         self._max_delay = float(max_delay_seconds)
         self._replay = _ReplayCache()
@@ -194,6 +222,7 @@ class SecureAgentChannel:
         nonce = secrets.token_hex(16)
 
         sig = self._sign(
+            key_id=self._key_id,
             sender_id=sender_id,
             timestamp=timestamp,
             nonce=nonce,
@@ -221,7 +250,7 @@ class SecureAgentChannel:
             if envelope.version != PROTOCOL_VERSION:
                 return ValidationResult.reject(ReasonCode.UNSUPPORTED_VERSION)
 
-            if not hmac.compare_digest(envelope.key_id, self._key_id):
+            if envelope.key_id not in self._key_ring:
                 return ValidationResult.reject(ReasonCode.UNKNOWN_KEY_ID)
 
             if self._allowed is not None and envelope.sender_id not in self._allowed:
@@ -244,6 +273,7 @@ class SecureAgentChannel:
 
             canonical = self._canonicalize(dict(envelope.payload))
             expected = self._sign(
+                key_id=envelope.key_id,
                 sender_id=envelope.sender_id,
                 timestamp=envelope.timestamp,
                 nonce=envelope.nonce,
@@ -283,13 +313,14 @@ class SecureAgentChannel:
 
     def _sign(
         self,
+        key_id: str,
         *,
         sender_id: str,
         timestamp: float,
         nonce: str,
         canonical_payload: bytes,
     ) -> str:
-        mac = hmac.new(self._secret, digestmod=hashlib.sha256)
+        mac = hmac.new(self._key_ring[key_id], digestmod=hashlib.sha256)
         mac.update(PROTOCOL_VERSION.encode())
         mac.update(b"\x00")
         mac.update(sender_id.encode())
