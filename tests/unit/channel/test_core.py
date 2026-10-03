@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import time
+from pathlib import Path
 
 import pytest
 
@@ -501,3 +502,50 @@ class TestChannelErrorHandling:
         result = channel.verify_message(env)
         assert result.approved is False
         assert result.reason is ReasonCode.INTERNAL_ERROR
+
+
+# =============================================================================
+# TestReplayCachePersistence - SQLite durability across instances
+# =============================================================================
+
+
+class TestReplayCachePersistence:
+    """Tests for SQLite-backed nonce persistence across instances."""
+
+    def test_nonce_persists_across_instances(self, tmp_path: Path) -> None:
+        """A nonce added by one instance is detected by a new instance."""
+        db_file = tmp_path / "replay.db"
+
+        cache1 = _ReplayCache(db_path=db_file)
+        assert cache1.check_and_add("persistent-nonce") is True
+
+        cache2 = _ReplayCache(db_path=db_file)
+        assert cache2.check_and_add("persistent-nonce") is False
+
+    def test_bounded_size_persists(self, tmp_path: Path) -> None:
+        """FIFO eviction survives across instances."""
+        db_file = tmp_path / "replay.db"
+        max_size = 3
+
+        cache1 = _ReplayCache(max_size=max_size, db_path=db_file)
+        for i in range(10):
+            cache1.check_and_add(f"n{i}")
+
+        cache2 = _ReplayCache(max_size=max_size, db_path=db_file)
+        assert cache2.check_and_add("n9") is False
+        assert cache2.check_and_add("n0") is True
+
+    def test_memory_mode_isolated(self) -> None:
+        """Two default instances do not share state."""
+        cache1 = _ReplayCache()
+        cache2 = _ReplayCache()
+
+        assert cache1.check_and_add("isolated") is True
+        assert cache2.check_and_add("isolated") is True
+
+    def test_db_file_created_after_first_write(self, tmp_path: Path) -> None:
+        """The SQLite file exists after the first write."""
+        db_file = tmp_path / "replay.db"
+        cache = _ReplayCache(db_path=db_file)
+        cache.check_and_add("first")
+        assert db_file.exists()

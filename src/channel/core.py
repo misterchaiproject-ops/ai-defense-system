@@ -20,11 +20,12 @@ import logging
 import math
 import re
 import secrets
+import sqlite3
 import threading
 import time
-from collections import OrderedDict
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
@@ -92,22 +93,54 @@ class Envelope:
 
 
 class _ReplayCache:
-    """Bounded, thread-safe nonce cache (FIFO eviction)."""
+    """Bounded, thread-safe nonce cache (FIFO) with SQLite persistence.
 
-    def __init__(self, max_size: int = 10_000) -> None:
+    Default (db_path=None) uses an isolated in-memory database.
+    Providing db_path enables durable storage across restarts.
+    """
+
+    def __init__(
+        self,
+        max_size: int = 10_000,
+        db_path: Path | str | None = None,
+    ) -> None:
         if max_size <= 0:
             raise ValueError("max_size must be > 0")
         self._max = max_size
-        self._seen: OrderedDict[str, None] = OrderedDict()
         self._lock = threading.Lock()
+
+        if db_path is None or db_path == ":memory:":
+            location = ":memory:"
+        else:
+            location = str(db_path)
+            Path(location).parent.mkdir(parents=True, exist_ok=True)
+
+        self._conn = sqlite3.connect(location, check_same_thread=False)
+        self._conn.execute(
+            "CREATE TABLE IF NOT EXISTS seen_nonces ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "nonce TEXT NOT NULL UNIQUE)"
+        )
+        self._conn.commit()
 
     def check_and_add(self, nonce: str) -> bool:
         with self._lock:
-            if nonce in self._seen:
+            row = self._conn.execute(
+                "SELECT 1 FROM seen_nonces WHERE nonce = ? LIMIT 1",
+                (nonce,),
+            ).fetchone()
+            if row is not None:
                 return False
-            self._seen[nonce] = None
-            while len(self._seen) > self._max:
-                self._seen.popitem(last=False)
+            self._conn.execute(
+                "INSERT INTO seen_nonces (nonce) VALUES (?)",
+                (nonce,),
+            )
+            self._conn.execute(
+                "DELETE FROM seen_nonces WHERE id NOT IN ("
+                "SELECT id FROM seen_nonces ORDER BY id DESC LIMIT ?)",
+                (self._max,),
+            )
+            self._conn.commit()
             return True
 
 
