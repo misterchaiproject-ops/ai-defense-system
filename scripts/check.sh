@@ -64,7 +64,7 @@ fi
 
 echo ""
 echo "[7/7] coverage (branch, fail-under=80)..."
-if ! uv run pytest -q --cov=contracts --cov=guardrail --cov=channel --cov=orchestrator --cov=audit --cov-report=term-missing --cov-fail-under=80; then
+if ! uv run pytest -q --cov=contracts --cov=guardrail --cov=channel --cov=orchestrator --cov=audit --cov=doctor --cov-report=term-missing --cov-fail-under=80; then
     echo " FAIL: Coverage below threshold"
     FAILED=1
 else
