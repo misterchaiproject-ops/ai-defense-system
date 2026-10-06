@@ -29,6 +29,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
+from audit import SecureAuditLog
 from contracts import ReasonCode, ValidationResult
 
 logger = logging.getLogger(__name__)
@@ -161,6 +162,7 @@ class SecureAgentChannel:
         key_ring: Mapping[str, bytes] | None = None,
         active_key_id: str | None = None,
         db_path: Path | str | None = None,
+        audit_log: SecureAuditLog | None = None,
     ) -> None:
         if key_ring is not None and (shared_secret is not None or key_id is not None):
             raise ValueError("shared_secret/key_id and key_ring are mutually exclusive")
@@ -210,6 +212,7 @@ class SecureAgentChannel:
         self._allowed = allowed_senders
         self._max_delay = float(max_delay_seconds)
         self._replay = _ReplayCache(db_path=db_path)
+        self._audit_log = audit_log
 
     # ------------------------------------------------------------------
     # Create
