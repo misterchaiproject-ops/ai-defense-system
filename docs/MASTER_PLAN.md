@@ -27,7 +27,17 @@ NIST COSAiS, OWASP ACS, and IETF standards.
 
 ---
 
-## Current Phase: Phase 2 (Test Expansion)
+## Current Phase: Phase 3.5 (Self-Healing Foundation)
+
+**Active work:**
+- G5.2: Audit logging integration in `verify_message` (deferred from Phase 3)
+- Self-Healing L3: Auto-Test Retry + Cache Rebuild
+- Self-Healing L4: Runtime Circuit Breakers
+
+**Recently completed (Phase 3 + 3.5):**
+- G1 (Replay SQLite), G2 (Key Ring), G5 (Audit Log), G5.1 (Audit MVP)
+- Self-Healing L1 (`make doctor`), L2 (`safe-commit.sh V2`)
+- DevContainer for reproducible environments
 
 ### Progress
 
@@ -53,10 +63,10 @@ NIST COSAiS, OWASP ACS, and IETF standards.
 
 | Stage | Focus | Timeline | Status |
 |-------|-------|----------|--------|
-| 1 | Foundation hardening | Month 1 | DONE |
-| 2 | Expand tests | Month 1-2 | IN PROGRESS |
-| 2.5 | Standards & threat model | Month 2 | PENDING |
-| 3 | Architectural fixes | Month 2 | PENDING |
+| 1   | Foundation hardening     | Month 1     | DONE    |
+| 2   | Expand tests             | Month 1-2   | DONE    |
+| 2.5 | Standards & threat model | Month 2     | DONE    |
+| 3   | Architectural fixes (G1,G2,G5,G5.1) | Month 2-3 | DONE |
 | 4 | Comprehensive docs | Month 3 | PENDING |
 | 5 | Performance benchmarks | Month 3 | PENDING |
 | 6 | Red Team Agent | Month 4-5 | PENDING |
