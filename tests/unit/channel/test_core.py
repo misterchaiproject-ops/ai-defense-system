@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from audit import SecureAuditLog
 from channel.core import (
     _MAX_PAYLOAD_BYTES,
     Envelope,
@@ -701,3 +702,208 @@ class TestChannelG1Wiring:
 
         assert ch1.verify_message(env).approved is True
         assert ch2.verify_message(env).approved is True
+
+
+# ============================================================
+# 10. Audit Logging — G5.2
+# ============================================================
+
+
+class TestAuditLogging:
+    """Audit log integration with verify_message."""
+
+    @pytest.fixture
+    def audit_logger(self, tmp_path: Path) -> SecureAuditLog:
+        return SecureAuditLog(
+            log_path=tmp_path / "audit.enc",
+            key=b"a" * 32,
+        )
+
+    @pytest.fixture
+    def wired_channel(
+        self,
+        secret: bytes,
+        audit_logger: SecureAuditLog,
+    ) -> SecureAgentChannel:
+        return SecureAgentChannel(
+            shared_secret=secret,
+            key_id="test-v1",
+            allowed_senders=frozenset({"Agent_A", "Agent_B"}),
+            audit_log=audit_logger,
+        )
+
+    def test_unknown_key_id_writes_audit(
+        self,
+        wired_channel: SecureAgentChannel,
+        audit_logger: SecureAuditLog,
+    ) -> None:
+        envelope = Envelope(
+            version="v1",
+            key_id="unknown-v1",
+            sender_id="Agent_A",
+            timestamp=time.time(),
+            nonce="a" * 32,
+            payload={"x": 1},
+            signature="b" * 64,
+        )
+
+        result = wired_channel.verify_message(envelope)
+
+        assert result.approved is False
+        events = audit_logger.read_all()
+        assert len(events) == 1
+        assert events[0].event_type == "verify_rejected"
+        assert events[0].agent_id == "<unknown>"
+        assert events[0].details["reason"] == "UNKNOWN_KEY_ID"
+        assert events[0].details["key_id"] == "unknown-v1"
+
+    def test_role_not_permitted_writes_audit(
+        self,
+        wired_channel: SecureAgentChannel,
+        audit_logger: SecureAuditLog,
+    ) -> None:
+        envelope = Envelope(
+            version="v1",
+            key_id="test-v1",
+            sender_id="Agent_X",
+            timestamp=time.time(),
+            nonce="a" * 32,
+            payload={"x": 1},
+            signature="b" * 64,
+        )
+
+        result = wired_channel.verify_message(envelope)
+
+        assert result.approved is False
+        events = audit_logger.read_all()
+        assert len(events) == 1
+        assert events[0].event_type == "verify_rejected"
+        assert events[0].agent_id == "Agent_X"
+        assert events[0].details["reason"] == "ROLE_NOT_PERMITTED"
+
+    def test_timestamp_too_old_writes_audit(
+        self,
+        wired_channel: SecureAgentChannel,
+        audit_logger: SecureAuditLog,
+    ) -> None:
+        envelope = Envelope(
+            version="v1",
+            key_id="test-v1",
+            sender_id="Agent_A",
+            timestamp=time.time() - 10_000.0,
+            nonce="a" * 32,
+            payload={"x": 1},
+            signature="b" * 64,
+        )
+
+        result = wired_channel.verify_message(envelope)
+
+        assert result.approved is False
+        events = audit_logger.read_all()
+        assert len(events) == 1
+        assert events[0].agent_id == "Agent_A"
+        assert events[0].details["reason"] == "TIMESTAMP_TOO_OLD"
+
+    def test_timestamp_from_future_writes_audit(
+        self,
+        wired_channel: SecureAgentChannel,
+        audit_logger: SecureAuditLog,
+    ) -> None:
+        envelope = Envelope(
+            version="v1",
+            key_id="test-v1",
+            sender_id="Agent_A",
+            timestamp=time.time() + 10_000.0,
+            nonce="a" * 32,
+            payload={"x": 1},
+            signature="b" * 64,
+        )
+
+        result = wired_channel.verify_message(envelope)
+
+        assert result.approved is False
+        events = audit_logger.read_all()
+        assert len(events) == 1
+        assert events[0].agent_id == "Agent_A"
+        assert events[0].details["reason"] == "TIMESTAMP_FROM_FUTURE"
+
+    def test_replay_detected_writes_audit(
+        self,
+        wired_channel: SecureAgentChannel,
+        audit_logger: SecureAuditLog,
+    ) -> None:
+        envelope = Envelope(
+            version="v1",
+            key_id="test-v1",
+            sender_id="Agent_A",
+            timestamp=time.time(),
+            nonce="c" * 32,
+            payload={"x": 1},
+            signature="b" * 64,
+        )
+        wired_channel.verify_message(envelope)
+        envelope2 = Envelope(
+            version="v1",
+            key_id="test-v1",
+            sender_id="Agent_A",
+            timestamp=time.time(),
+            nonce="c" * 32,
+            payload={"x": 1},
+            signature="b" * 64,
+        )
+        result = wired_channel.verify_message(envelope2)
+
+        assert result.approved is False
+        events = audit_logger.read_all()
+        assert len(events) == 2
+        assert events[1].event_type == "verify_rejected"
+        assert events[1].agent_id == "Agent_A"
+        assert events[1].details["reason"] == "REPLAY_DETECTED"
+
+    def test_invalid_signature_writes_audit(
+        self,
+        wired_channel: SecureAgentChannel,
+        audit_logger: SecureAuditLog,
+    ) -> None:
+        envelope = Envelope(
+            version="v1",
+            key_id="test-v1",
+            sender_id="Agent_A",
+            timestamp=time.time(),
+            nonce="d" * 32,
+            payload={"x": 1},
+            signature="c" * 64,
+        )
+
+        result = wired_channel.verify_message(envelope)
+
+        assert result.approved is False
+        events = audit_logger.read_all()
+        assert len(events) == 1
+        assert events[0].event_type == "verify_rejected"
+        assert events[0].agent_id == "<unverified>"
+        assert events[0].details["reason"] == "INVALID_SIGNATURE"
+
+    def test_no_audit_log_silently_drops_rejection(
+        self,
+        secret: bytes,
+    ) -> None:
+        channel = SecureAgentChannel(
+            shared_secret=secret,
+            key_id="test-v1",
+            allowed_senders=frozenset({"Agent_A"}),
+            audit_log=None,
+        )
+        envelope = Envelope(
+            version="v1",
+            key_id="bad-v1",
+            sender_id="Agent_A",
+            timestamp=time.time(),
+            nonce="e" * 32,
+            payload={"x": 1},
+            signature="b" * 64,
+        )
+
+        result = channel.verify_message(envelope)
+
+        assert result.approved is False
