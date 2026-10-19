@@ -66,6 +66,7 @@ def test_invalid_signature_does_not_poison_legitimate_nonce() -> None:
     assert legitimate_result.approved is True
     assert legitimate_result.reason is ReasonCode.OK
 
+
 def test_independent_sqlite_connections_do_not_accept_same_nonce_twice(
     tmp_path: Path,
 ) -> None:
