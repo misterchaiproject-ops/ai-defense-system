@@ -16,33 +16,57 @@ from channel.core import SecureAgentChannel, _ReplayCache, generate_shared_secre
 from contracts import ReasonCode
 
 
-def test_evicted_nonce_cannot_be_accepted_again_before_message_expiry() -> None:
-    """A valid message must not become replayable merely because the cache is full."""
+def test_cache_capacity_does_not_evict_unexpired_nonce() -> None:
+    """A full cache must fail closed rather than make an accepted message replayable."""
     channel = SecureAgentChannel(
         shared_secret=generate_shared_secret(),
         key_id="test-v1",
         allowed_senders=frozenset({"Agent_A"}),
     )
-    # Keep the test small and deterministic: one accepted nonce is evicted by the next.
-    channel._replay._max = 1
+    channel._replay._max = 2
 
     first = channel.create_message("Agent_A", {"action": "first"})
     second = channel.create_message("Agent_A", {"action": "second"})
+    third = channel.create_message("Agent_A", {"action": "third"})
 
-    first_result = channel.verify_message(first)
-    assert first_result.approved is True
-    assert first_result.reason is ReasonCode.OK
+    for envelope in (first, second):
+        result = channel.verify_message(envelope)
+        assert result.approved is True
+        assert result.reason is ReasonCode.OK
 
-    second_result = channel.verify_message(second)
-    assert second_result.approved is True
-    assert second_result.reason is ReasonCode.OK
+    full_result = channel.verify_message(third)
+    assert full_result.approved is False
+    assert full_result.reason is ReasonCode.INTERNAL_ERROR
 
-    # Both messages are freshly signed and within the 300-second validity window.
-    # Security invariant: eviction must not silently make the first nonce reusable.
+    # The first active nonce remains recorded even though the cache is full.
     replay_result = channel.verify_message(first)
     assert replay_result.approved is False
     assert replay_result.reason is ReasonCode.REPLAY_DETECTED
 
+
+def test_invalid_signature_does_not_poison_legitimate_nonce() -> None:
+    """Unauthenticated input must not reserve a nonce before signature validation."""
+    from dataclasses import replace
+
+    channel = SecureAgentChannel(
+        shared_secret=generate_shared_secret(),
+        key_id="test-v1",
+        allowed_senders=frozenset({"Agent_A"}),
+    )
+    envelope = channel.create_message("Agent_A", {"action": "legitimate"})
+    replacement_char = "0" if envelope.signature[0] != "0" else "1"
+    tampered = replace(
+        envelope,
+        signature=replacement_char + envelope.signature[1:],
+    )
+
+    invalid_result = channel.verify_message(tampered)
+    assert invalid_result.approved is False
+    assert invalid_result.reason is ReasonCode.INVALID_SIGNATURE
+
+    legitimate_result = channel.verify_message(envelope)
+    assert legitimate_result.approved is True
+    assert legitimate_result.reason is ReasonCode.OK
 
 def test_independent_sqlite_connections_do_not_accept_same_nonce_twice(
     tmp_path: Path,
