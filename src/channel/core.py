@@ -214,6 +214,24 @@ class SecureAgentChannel:
         self._key_ring = dict(key_ring) if key_ring is not None else None
         self._key_id = self._key_provider.get_active_key_id()
 
+    @staticmethod
+    def _validate_key_material(key_id: str, secret: bytes) -> bytes:
+        """Enforce cryptographic key invariants at the provider trust boundary."""
+        if not isinstance(secret, bytes):
+            raise TypeError(f"key provider returned non-bytes key for {key_id!r}")
+        if len(secret) < _MIN_SECRET_BYTES:
+            raise ValueError(
+                f"key provider returned a key shorter than {_MIN_SECRET_BYTES} bytes"
+            )
+        return secret
+
+    def _get_key(self, key_id: str) -> bytes | None:
+        """Fetch and validate key material from the injected provider."""
+        secret = self._key_provider.get_key(key_id)
+        if secret is None:
+            return None
+        return self._validate_key_material(key_id, secret)
+
     def create_message(self, sender_id: str, payload: Mapping[str, Any]) -> Envelope:
         if not _SENDER_RE.match(sender_id):
             raise ValueError("invalid sender_id")
@@ -249,7 +267,7 @@ class SecureAgentChannel:
             if envelope.version != PROTOCOL_VERSION:
                 return ValidationResult.reject(ReasonCode.UNSUPPORTED_VERSION)
 
-            if self._key_provider.get_key(envelope.key_id) is None:
+            if self._get_key(envelope.key_id) is None:
                 if not self._write_audit(envelope, "UNKNOWN_KEY_ID", "<unknown>"):
                     return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
                 return ValidationResult.reject(ReasonCode.UNKNOWN_KEY_ID)
@@ -325,7 +343,7 @@ class SecureAgentChannel:
         nonce: str,
         canonical_payload: bytes,
     ) -> str:
-        secret = self._key_provider.get_key(key_id)
+        secret = self._get_key(key_id)
         if secret is None:
             raise KeyError(f"unknown key_id: {key_id!r}")
         mac = hmac.new(secret, digestmod=hashlib.sha256)
