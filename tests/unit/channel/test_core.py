@@ -289,7 +289,8 @@ class TestTampering:
 
     def test_tampered_signature_rejected(self, channel: SecureAgentChannel) -> None:
         env = channel.create_message("Agent_A", {"x": 1})
-        tampered_signature = ("0" if env.signature[0] != "0" else "1") + env.signature[1:]
+        replacement = "0" if env.signature[0] != "0" else "1"
+        tampered_signature = replacement + env.signature[1:]
         tampered = dataclasses.replace(env, signature=tampered_signature)
         result = channel.verify_message(tampered)
         assert result.approved is False
@@ -300,7 +301,8 @@ class TestTampering:
     ) -> None:
         """An unauthenticated envelope must not poison a legitimate nonce."""
         valid = channel.create_message("Agent_A", {"action": "read"})
-        bad_signature = ("0" if valid.signature[0] != "0" else "1") + valid.signature[1:]
+        replacement = "0" if valid.signature[0] != "0" else "1"
+        bad_signature = replacement + valid.signature[1:]
         invalid = dataclasses.replace(valid, signature=bad_signature)
 
         rejected = channel.verify_message(invalid)
