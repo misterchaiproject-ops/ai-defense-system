@@ -25,7 +25,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/contracts", "src/guardrail", "src/channel", "src/orchestrator", "src/doctor"]
+packages = ["src/contracts", "src/guardrail", "src/channel", "src/orchestrator", "src/doctor", "src/ports"]
 
 # ========================================
 # pytest
@@ -79,7 +79,7 @@ ignore = [
 # coverage
 # ========================================
 [tool.coverage.run]
-source = ["contracts", "guardrail", "channel", "orchestrator", "audit", "doctor"]
+source = ["contracts", "guardrail", "channel", "orchestrator", "audit", "doctor", "ports"]
 branch = true
 
 [tool.coverage.report]
