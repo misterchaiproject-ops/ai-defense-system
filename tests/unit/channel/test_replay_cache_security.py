@@ -7,14 +7,17 @@ No production code is changed by this file.
 
 from __future__ import annotations
 
-from channel.core import SecureAgentChannel
+from channel.core import SecureAgentChannel, generate_shared_secret
 from contracts import ReasonCode
 
 
-def test_evicted_nonce_cannot_be_accepted_again_before_message_expiry(
-    channel: SecureAgentChannel,
-) -> None:
+def test_evicted_nonce_cannot_be_accepted_again_before_message_expiry() -> None:
     """A valid message must not become replayable merely because the cache is full."""
+    channel = SecureAgentChannel(
+        shared_secret=generate_shared_secret(),
+        key_id="test-v1",
+        allowed_senders=frozenset({"Agent_A"}),
+    )
     # Keep the test small and deterministic: one accepted nonce is evicted by the next.
     channel._replay._max = 1
 
