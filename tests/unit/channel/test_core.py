@@ -289,9 +289,30 @@ class TestTampering:
 
     def test_tampered_signature_rejected(self, channel: SecureAgentChannel) -> None:
         env = channel.create_message("Agent_A", {"x": 1})
-        tampered = dataclasses.replace(env, signature="0" * 64)
+        replacement = "0" if env.signature[0] != "0" else "1"
+        tampered_signature = replacement + env.signature[1:]
+        tampered = dataclasses.replace(env, signature=tampered_signature)
         result = channel.verify_message(tampered)
         assert result.approved is False
+        assert result.reason is ReasonCode.INVALID_SIGNATURE
+
+    def test_invalid_signature_does_not_consume_nonce(
+        self, channel: SecureAgentChannel
+    ) -> None:
+        """An unauthenticated envelope must not poison a legitimate nonce."""
+        valid = channel.create_message("Agent_A", {"action": "read"})
+        replacement = "0" if valid.signature[0] != "0" else "1"
+        bad_signature = replacement + valid.signature[1:]
+        invalid = dataclasses.replace(valid, signature=bad_signature)
+
+        rejected = channel.verify_message(invalid)
+        assert rejected.approved is False
+        assert rejected.reason is ReasonCode.INVALID_SIGNATURE
+
+        # The same envelope with its original, valid signature must still work.
+        accepted = channel.verify_message(valid)
+        assert accepted.approved is True
+        assert accepted.reason is ReasonCode.OK
 
     def test_tampered_nonce_rejected(self, channel: SecureAgentChannel) -> None:
         env = channel.create_message("Agent_A", {"x": 1})
