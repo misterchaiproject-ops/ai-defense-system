@@ -14,6 +14,7 @@ from channel.core import (
     Envelope,
     SecureAgentChannel,
     _ReplayCache,
+    _ReplayCacheFullError,
     _sanitize,
     generate_shared_secret,
 )
@@ -162,12 +163,13 @@ class TestReplayCache:
         cache.check_and_add("n1")
         assert cache.check_and_add("n1") is False
 
-    def test_bounded_size(self) -> None:
+    def test_capacity_does_not_evict_unexpired_nonces(self) -> None:
         cache = _ReplayCache(max_size=3)
-        for i in range(10):
-            cache.check_and_add(f"n{i}")
-        assert cache.check_and_add("n9") is False
-        assert cache.check_and_add("n0") is True
+        for i in range(3):
+            assert cache.check_and_add(f"n{i}") is True
+        assert cache.check_and_add("n0") is False
+        with pytest.raises(_ReplayCacheFullError, match="capacity exhausted"):
+            cache.check_and_add("n3")
 
     def test_many_unique_nonces(self) -> None:
         cache = _ReplayCache(max_size=100)
@@ -523,18 +525,45 @@ class TestReplayCachePersistence:
         cache2 = _ReplayCache(db_path=db_file)
         assert cache2.check_and_add("persistent-nonce") is False
 
-    def test_bounded_size_persists(self, tmp_path: Path) -> None:
-        """FIFO eviction survives across instances."""
+    def test_capacity_policy_persists_across_instances(self, tmp_path: Path) -> None:
+        """Unexpired nonce records survive restart and are not FIFO-evicted."""
         db_file = tmp_path / "replay.db"
         max_size = 3
 
         cache1 = _ReplayCache(max_size=max_size, db_path=db_file)
-        for i in range(10):
-            cache1.check_and_add(f"n{i}")
+        for i in range(max_size):
+            assert cache1.check_and_add(f"n{i}") is True
+        with pytest.raises(_ReplayCacheFullError, match="capacity exhausted"):
+            cache1.check_and_add("n3")
 
         cache2 = _ReplayCache(max_size=max_size, db_path=db_file)
-        assert cache2.check_and_add("n9") is False
-        assert cache2.check_and_add("n0") is True
+        assert cache2.check_and_add("n0") is False
+        with pytest.raises(_ReplayCacheFullError, match="capacity exhausted"):
+            cache2.check_and_add("n3")
+
+    def test_migrates_legacy_database_without_expiry_column(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Legacy nonce rows remain reserved after adding expiry metadata."""
+        import sqlite3
+
+        db_file = tmp_path / "legacy-replay.db"
+        connection = sqlite3.connect(db_file)
+        connection.execute(
+            "CREATE TABLE seen_nonces ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "nonce TEXT NOT NULL UNIQUE)"
+        )
+        connection.execute(
+            "INSERT INTO seen_nonces (nonce) VALUES (?)",
+            ("legacy-nonce",),
+        )
+        connection.commit()
+        connection.close()
+
+        cache = _ReplayCache(db_path=db_file)
+        assert cache.check_and_add("legacy-nonce") is False
 
     def test_memory_mode_isolated(self) -> None:
         """Two default instances do not share state."""
