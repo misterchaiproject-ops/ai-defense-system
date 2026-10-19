@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from audit import AuditEvent, SecureAuditLog
 from channel.core import _ReplayCache
 from ports import AuditSink, Clock, KeyProvider, ReplayStore
@@ -20,7 +22,7 @@ class _FakeKeyProvider:
         return "active"
 
 
-def test_secure_audit_log_implements_audit_sink(tmp_path) -> None:
+def test_secure_audit_log_implements_audit_sink(tmp_path: Path) -> None:
     audit_log = SecureAuditLog(tmp_path / "audit.log", b"k" * 32)
 
     assert isinstance(audit_log, AuditSink)
@@ -45,7 +47,7 @@ def test_fake_key_provider_implements_key_provider() -> None:
     assert provider.get_active_key_id() == "active"
 
 
-def test_audit_sink_contract_accepts_audit_event(tmp_path) -> None:
+def test_audit_sink_contract_accepts_audit_event(tmp_path: Path) -> None:
     audit_log = SecureAuditLog(tmp_path / "audit.log", b"k" * 32)
     sink: AuditSink = audit_log
 
