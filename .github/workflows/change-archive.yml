@@ -1,0 +1,38 @@
+name: Change Archive
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: change-archive-main
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate change archive
+        run: python scripts/update_change_archive.py
+
+      - name: Commit archive when changed
+        run: |
+          if git diff --quiet -- docs/CHANGELOG.md; then
+            echo "Change archive is already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/CHANGELOG.md
+          git commit -m "docs: update automated change archive"
+          git push
