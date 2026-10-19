@@ -58,8 +58,8 @@ def test_injected_clock_and_replay_store_control_runtime() -> None:
     envelope = channel.create_message("agent-1", {"action": "read"})
 
     assert envelope.timestamp == 1_000.0
-    assert channel.verify_message(envelope).ok
-    assert not channel.verify_message(envelope).ok
+    assert channel.verify_message(envelope).approved is True
+    assert channel.verify_message(envelope).approved is False
 
 
 def test_injected_key_provider_is_used_for_signing_and_verification() -> None:
@@ -69,7 +69,7 @@ def test_injected_key_provider_is_used_for_signing_and_verification() -> None:
     envelope = channel.create_message("agent-1", {"action": "read"})
 
     assert envelope.key_id == "managed"
-    assert channel.verify_message(envelope).ok
+    assert channel.verify_message(envelope).approved is True
 
 
 def test_injected_audit_sink_receives_security_event() -> None:
@@ -93,7 +93,7 @@ def test_injected_audit_sink_receives_security_event() -> None:
 
     result = channel.verify_message(envelope)
 
-    assert not result.ok
+    assert result.approved is False
     assert len(sink.events) == 1
 
 
@@ -101,7 +101,7 @@ def test_legacy_constructor_remains_compatible() -> None:
     channel = SecureAgentChannel(shared_secret=b"k" * 32, key_id="legacy")
     envelope = channel.create_message("agent-1", {"action": "read"})
 
-    assert channel.verify_message(envelope).ok
+    assert channel.verify_message(envelope).approved is True
 
 
 def test_dependency_ports_are_runtime_contracts() -> None:
