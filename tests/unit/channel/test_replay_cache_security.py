@@ -1,9 +1,7 @@
 """Security regression tests for replay-cache retention and SQLite sharing.
 
-These tests intentionally assert security invariants. The eviction test is expected
-to fail on the current bounded FIFO implementation. The independent-connection test
-checks concurrent duplicate reservation against one SQLite file; any exception or
-duplicate acceptance is a failure requiring investigation. No production code changes.
+These tests assert that unexpired nonces are not evicted, invalid signatures cannot
+poison nonce state, and independent SQLite connections reserve each nonce atomically.
 """
 
 from __future__ import annotations
