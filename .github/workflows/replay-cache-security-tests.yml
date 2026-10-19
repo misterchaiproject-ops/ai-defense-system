@@ -29,6 +29,8 @@ jobs:
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --frozen
+      - name: Lint changed Python files
+        run: uv run ruff check src/channel/core.py tests/unit/channel/test_core.py tests/unit/channel/test_replay_cache_security.py
       - name: Check formatting of changed Python files
         run: uv run ruff format --check src/channel/core.py tests/unit/channel/test_core.py tests/unit/channel/test_replay_cache_security.py
       - name: Run channel regression and replay-cache security tests
