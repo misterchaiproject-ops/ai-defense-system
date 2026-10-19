@@ -6,7 +6,6 @@ They define the minimum contracts required by future dependency-injection work.
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Protocol
 
 from audit import AuditEvent
@@ -31,8 +30,8 @@ class ReplayStore(Protocol):
 class Clock(Protocol):
     """Source of wall-clock time used by security decisions."""
 
-    def now(self) -> datetime:
-        """Return the current timezone-aware UTC timestamp."""
+    def now(self) -> float:
+        """Return the current UTC Unix timestamp in seconds."""
         ...
 
 
