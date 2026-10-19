@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pytest
+
 from channel.core import SecureAgentChannel
 from ports import AuditSink, Clock, KeyProvider, ReplayStore
 
@@ -37,6 +39,18 @@ class FakeKeyProvider:
         return self.key_id
 
 
+class ShortKeyProvider(FakeKeyProvider):
+    pass
+
+
+class NonBytesKeyProvider:
+    def get_key(self, key_id: str) -> bytes | None:
+        return "not-a-key"  # type: ignore[return-value]
+
+    def get_active_key_id(self) -> str:
+        return "managed"
+
+
 @dataclass
 class FakeAuditSink:
     events: list[object]
@@ -70,6 +84,21 @@ def test_injected_key_provider_is_used_for_signing_and_verification() -> None:
 
     assert envelope.key_id == "managed"
     assert channel.verify_message(envelope).approved is True
+
+
+def test_short_injected_key_is_rejected_at_crypto_boundary() -> None:
+    provider = ShortKeyProvider("managed", b"k" * 31)
+    channel = SecureAgentChannel(key_provider=provider)
+
+    with pytest.raises(ValueError, match="shorter than 32 bytes"):
+        channel.create_message("agent-1", {"action": "read"})
+
+
+def test_non_bytes_injected_key_is_rejected_at_crypto_boundary() -> None:
+    channel = SecureAgentChannel(key_provider=NonBytesKeyProvider())
+
+    with pytest.raises(TypeError, match="non-bytes key"):
+        channel.create_message("agent-1", {"action": "read"})
 
 
 def test_injected_audit_sink_receives_security_event() -> None:
