@@ -6,6 +6,7 @@ import time
 
 import pytest
 
+from audit import AuditEvent
 from channel.core import Envelope, SecureAgentChannel
 from contracts import ReasonCode
 
@@ -13,7 +14,7 @@ from contracts import ReasonCode
 class FailingAuditLog:
     """Audit sink that deterministically fails writes."""
 
-    def append(self, event: object) -> None:
+    def append(self, event: AuditEvent) -> None:
         raise OSError("simulated audit storage failure")
 
 
@@ -24,7 +25,7 @@ def channel_with_failing_audit() -> SecureAgentChannel:
         shared_secret=b"s" * 32,
         key_id="test-v1",
         allowed_senders=frozenset({"Agent_A"}),
-        audit_log=FailingAuditLog(),  # type: ignore[arg-type]
+        audit_log=FailingAuditLog(),
     )
 
 
