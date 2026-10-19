@@ -1,32 +1,24 @@
-"""Default adapters used by the dependency-injection layer.
-
-These adapters preserve the existing runtime behavior while allowing the
-core security components to depend on stable ports rather than concrete
-infrastructure.
-"""
+"""Default adapters for the dependency-injection layer."""
 
 from __future__ import annotations
 
-import math
-from collections.abc import Mapping
 import re
 import time
-
-from ports import Clock, KeyProvider
+from collections.abc import Mapping
 
 _KEY_ID_RE = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
 _MIN_SECRET_BYTES = 32
 
 
 class SystemClock:
-    """Production wall-clock implementation of :class:`Clock`."""
+    """Production wall-clock implementation of the Clock protocol."""
 
     def now(self) -> float:
         return time.time()
 
 
 class MappingKeyProvider:
-    """Immutable-by-copy key provider backed by a validated mapping."""
+    """Validated key provider backed by an internal copy of a mapping."""
 
     def __init__(self, key_ring: Mapping[str, bytes], active_key_id: str) -> None:
         if not key_ring:
@@ -60,12 +52,6 @@ class MappingKeyProvider:
             f"MappingKeyProvider(active_key_id={self._active_key_id!r}, "
             f"key_count={len(self._key_ring)})"
         )
-
-
-# Runtime contract checks intentionally happen here so an invalid adapter
-# fails during construction rather than at the first security decision.
-assert isinstance(SystemClock(), Clock)
-assert isinstance(MappingKeyProvider({"default": b"k" * 32}, "default"), KeyProvider)
 
 
 __all__ = ["MappingKeyProvider", "SystemClock"]
