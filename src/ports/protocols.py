@@ -6,9 +6,10 @@ They define the minimum contracts required by future dependency-injection work.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from audit import AuditEvent
+if TYPE_CHECKING:
+    from audit import AuditEvent
 
 
 @runtime_checkable
