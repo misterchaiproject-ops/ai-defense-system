@@ -98,8 +98,11 @@
     ├─ 4. envelope.sender_id in self._allowed → ROLE_NOT_PERMITTED
     ├─ 5. timestamp freshness                 → TIMESTAMP_TOO_OLD
     │                                          TIMESTAMP_FROM_FUTURE
-    ├─ 6. self._replay.check_and_add(nonce)   → REPLAY_DETECTED
+    ├─ 6. canonicalize payload + calculate expected HMAC
     ├─ 7. hmac.compare_digest(sig, expected)  → INVALID_SIGNATURE
+    ├─ 8. atomic _replay.check_and_add(nonce)  → REPLAY_DETECTED
+    │      retains nonce until message expiry; no active FIFO eviction
+    │      capacity exhaustion fails closed (INTERNAL_ERROR)
     │
     └─ OK → ValidationResult.ok()
 ```
@@ -125,7 +128,9 @@
 
 ### 3.3 Availability
 
-- Replay Cache bounded by  (FIFO eviction)
+- Replay Cache is bounded and expiry-aware; unexpired nonces are never evicted to make room
+- SQLite `BEGIN IMMEDIATE` serializes nonce reservation across independent connections
+- Capacity exhaustion fails closed rather than weakening replay protection
 - SQLite persistence prevents state loss on restart
 -  prevents environment drift
 
