@@ -296,9 +296,7 @@ class TestTampering:
         assert result.approved is False
         assert result.reason is ReasonCode.INVALID_SIGNATURE
 
-    def test_invalid_signature_does_not_consume_nonce(
-        self, channel: SecureAgentChannel
-    ) -> None:
+    def test_invalid_signature_does_not_consume_nonce(self, channel: SecureAgentChannel) -> None:
         """An unauthenticated envelope must not poison a legitimate nonce."""
         valid = channel.create_message("Agent_A", {"action": "read"})
         replacement = "0" if valid.signature[0] != "0" else "1"
