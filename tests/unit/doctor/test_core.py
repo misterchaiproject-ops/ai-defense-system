@@ -20,7 +20,7 @@ from doctor.core import (
 )
 
 
-@pytest.fi@pytest.fixture
+@pytest.fixture
 def healthy_root(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -36,7 +36,10 @@ def healthy_root(
     fake_home = tmp_path / "home"
     (fake_home / ".cache" / "pre-commit").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(fake_home))
-    return tmp_pathstCheckPythonVersion:
+    return tmp_path
+
+
+class TestCheckPythonVersion:
     """Tests for check_python_version."""
 
     def test_ok_on_python_312(self) -> None:
