@@ -375,6 +375,11 @@ class SecureAgentChannel:
 
             return ValidationResult.ok()
 
+        except _ReplayCacheFullError:
+            logger.error("Replay cache capacity exhausted; rejecting message")
+            if isinstance(envelope, Envelope):
+                self._write_audit(envelope, "REPLAY_CACHE_FULL", envelope.sender_id)
+            return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
         except Exception:
             logger.exception("Channel internal error")
             return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
