@@ -30,7 +30,14 @@ from typing import Any
 
 from audit import AuditEvent
 from contracts import ReasonCode, ValidationResult
-from ports import AuditSink, Clock, KeyProvider, MappingKeyProvider, ReplayStore, SystemClock
+from ports import (
+    AuditSink,
+    Clock,
+    KeyProvider,
+    MappingKeyProvider,
+    ReplayStore,
+    SystemClock,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +194,9 @@ class SecureAgentChannel:
         if not isinstance(self._key_provider, KeyProvider):
             raise TypeError("key_provider must implement KeyProvider")
 
-        if isinstance(max_delay_seconds, bool) or not isinstance(max_delay_seconds, int | float):
+        if isinstance(max_delay_seconds, bool) or not isinstance(
+            max_delay_seconds, int | float
+        ):
             raise TypeError("max_delay_seconds must be numeric")
         if not math.isfinite(max_delay_seconds) or not (0 < max_delay_seconds <= 300):
             raise ValueError("max_delay_seconds must be in (0, 300]")
@@ -199,7 +208,9 @@ class SecureAgentChannel:
 
         self._allowed = allowed_senders
         self._max_delay = float(max_delay_seconds)
-        self._replay: ReplayStore = replay_store if replay_store is not None else _ReplayCache(db_path=db_path)
+        self._replay: ReplayStore = (
+            replay_store if replay_store is not None else _ReplayCache(db_path=db_path)
+        )
         self._audit_log = audit_log
         self._clock: Clock = clock if clock is not None else _SystemClock()
 
@@ -274,24 +285,32 @@ class SecureAgentChannel:
 
             if self._allowed is not None and envelope.sender_id not in self._allowed:
                 logger.warning("Unauthorized sender: %s", _sanitize(envelope.sender_id))
-                if not self._write_audit(envelope, "ROLE_NOT_PERMITTED", envelope.sender_id):
+                if not self._write_audit(
+                    envelope, "ROLE_NOT_PERMITTED", envelope.sender_id
+                ):
                     return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
                 return ValidationResult.reject(ReasonCode.ROLE_NOT_PERMITTED)
 
             now = self._clock.now()
             delta = now - envelope.timestamp
             if delta > self._max_delay:
-                if not self._write_audit(envelope, "TIMESTAMP_TOO_OLD", envelope.sender_id):
+                if not self._write_audit(
+                    envelope, "TIMESTAMP_TOO_OLD", envelope.sender_id
+                ):
                     return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
                 return ValidationResult.reject(ReasonCode.TIMESTAMP_TOO_OLD)
             if delta < -_MAX_CLOCK_SKEW_FUTURE:
-                if not self._write_audit(envelope, "TIMESTAMP_FROM_FUTURE", envelope.sender_id):
+                if not self._write_audit(
+                    envelope, "TIMESTAMP_FROM_FUTURE", envelope.sender_id
+                ):
                     return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
                 return ValidationResult.reject(ReasonCode.TIMESTAMP_FROM_FUTURE)
 
             if not self._replay.check_and_add(envelope.nonce):
                 logger.warning("Replay detected from %s", _sanitize(envelope.sender_id))
-                if not self._write_audit(envelope, "REPLAY_DETECTED", envelope.sender_id):
+                if not self._write_audit(
+                    envelope, "REPLAY_DETECTED", envelope.sender_id
+                ):
                     return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
                 return ValidationResult.reject(ReasonCode.REPLAY_DETECTED)
 
@@ -308,7 +327,9 @@ class SecureAgentChannel:
                     "Invalid signature from %s",
                     _sanitize(envelope.sender_id),
                 )
-                if not self._write_audit(envelope, "INVALID_SIGNATURE", "<unverified>"):
+                if not self._write_audit(
+                    envelope, "INVALID_SIGNATURE", "<unverified>"
+                ):
                     return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
                 return ValidationResult.reject(ReasonCode.INVALID_SIGNATURE)
 
