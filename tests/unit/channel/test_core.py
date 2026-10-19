@@ -861,33 +861,19 @@ class TestAuditLogging:
         wired_channel: SecureAgentChannel,
         audit_logger: SecureAuditLog,
     ) -> None:
-        envelope = Envelope(
-            version="v1",
-            key_id="test-v1",
-            sender_id="Agent_A",
-            timestamp=time.time(),
-            nonce="c" * 32,
-            payload={"x": 1},
-            signature="b" * 64,
-        )
-        wired_channel.verify_message(envelope)
-        envelope2 = Envelope(
-            version="v1",
-            key_id="test-v1",
-            sender_id="Agent_A",
-            timestamp=time.time(),
-            nonce="c" * 32,
-            payload={"x": 1},
-            signature="b" * 64,
-        )
-        result = wired_channel.verify_message(envelope2)
+        envelope = wired_channel.create_message("Agent_A", {"x": 1})
+        first_result = wired_channel.verify_message(envelope)
+        assert first_result.approved is True
 
+        result = wired_channel.verify_message(envelope)
         assert result.approved is False
+        assert result.reason is ReasonCode.REPLAY_DETECTED
+
         events = audit_logger.read_all()
-        assert len(events) == 2
-        assert events[1].event_type == "verify_rejected"
-        assert events[1].agent_id == "Agent_A"
-        assert events[1].details["reason"] == "REPLAY_DETECTED"
+        assert len(events) == 1
+        assert events[0].event_type == "verify_rejected"
+        assert events[0].agent_id == "Agent_A"
+        assert events[0].details["reason"] == "REPLAY_DETECTED"
 
     def test_invalid_signature_writes_audit(
         self,
