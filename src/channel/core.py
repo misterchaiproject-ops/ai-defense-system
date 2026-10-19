@@ -271,7 +271,9 @@ class SecureAgentChannel:
 
         if isinstance(max_delay_seconds, bool) or not isinstance(max_delay_seconds, int | float):
             raise TypeError("max_delay_seconds must be numeric")
-        if not math.isfinite(max_delay_seconds) or not (0 < max_delay_seconds <= _MAX_MESSAGE_AGE_SECONDS):
+        if not math.isfinite(max_delay_seconds) or not (
+            0 < max_delay_seconds <= _MAX_MESSAGE_AGE_SECONDS
+        ):
             raise ValueError("max_delay_seconds must be in (0, 300]")
 
         if allowed_senders is not None:
