@@ -38,6 +38,7 @@ PROTOCOL_VERSION = "v1"
 _MIN_SECRET_BYTES = 32
 _MAX_PAYLOAD_BYTES = 64 * 1024
 _MAX_CLOCK_SKEW_FUTURE = 1.0
+_MAX_MESSAGE_AGE_SECONDS = 300.0
 
 _SENDER_RE = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
 _NONCE_RE = re.compile(r"^[0-9a-f]{32}$")
@@ -93,7 +94,7 @@ class Envelope:
 # ---------------------------------------------------------------------------
 
 
-_MAX_REPLAY_RETENTION_SECONDS = 301.0
+_MAX_REPLAY_RETENTION_SECONDS = _MAX_MESSAGE_AGE_SECONDS + _MAX_CLOCK_SKEW_FUTURE
 
 
 class _ReplayCacheFullError(RuntimeError):
@@ -270,7 +271,7 @@ class SecureAgentChannel:
 
         if isinstance(max_delay_seconds, bool) or not isinstance(max_delay_seconds, int | float):
             raise TypeError("max_delay_seconds must be numeric")
-        if not math.isfinite(max_delay_seconds) or not (0 < max_delay_seconds <= 300):
+        if not math.isfinite(max_delay_seconds) or not (0 < max_delay_seconds <= _MAX_MESSAGE_AGE_SECONDS):
             raise ValueError("max_delay_seconds must be in (0, 300]")
 
         if allowed_senders is not None:
@@ -361,7 +362,7 @@ class SecureAgentChannel:
             # signature cannot poison the nonce of a legitimate envelope.
             if not self._replay.check_and_add(
                 envelope.nonce,
-                expires_at=envelope.timestamp + self._max_delay,
+                expires_at=envelope.timestamp + _MAX_MESSAGE_AGE_SECONDS,
             ):
                 logger.warning(
                     "Replay detected from %s",
