@@ -93,11 +93,19 @@ class Envelope:
 # ---------------------------------------------------------------------------
 
 
+_MAX_REPLAY_RETENTION_SECONDS = 301.0
+
+
+class _ReplayCacheFullError(RuntimeError):
+    """Raised when all replay-cache slots are occupied by unexpired nonces."""
+
+
 class _ReplayCache:
-    """Bounded, thread-safe nonce cache (FIFO) with SQLite persistence.
+    """SQLite-backed nonce cache that never evicts unexpired replay records.
 
     Default (db_path=None) uses an isolated in-memory database.
-    Providing db_path enables durable storage across restarts.
+    Providing db_path enables durable storage across restarts. Records are
+    retained until their associated message can no longer pass timestamp checks.
     """
 
     def __init__(
@@ -116,33 +124,100 @@ class _ReplayCache:
             location = str(db_path)
             Path(location).parent.mkdir(parents=True, exist_ok=True)
 
-        self._conn = sqlite3.connect(location, check_same_thread=False)
-        self._conn.execute(
-            "CREATE TABLE IF NOT EXISTS seen_nonces ("
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-            "nonce TEXT NOT NULL UNIQUE)"
+        self._conn = sqlite3.connect(
+            location,
+            timeout=5.0,
+            check_same_thread=False,
         )
-        self._conn.commit()
-
-    def check_and_add(self, nonce: str) -> bool:
-        with self._lock:
-            row = self._conn.execute(
-                "SELECT 1 FROM seen_nonces WHERE nonce = ? LIMIT 1",
-                (nonce,),
-            ).fetchone()
-            if row is not None:
-                return False
+        self._conn.execute("PRAGMA busy_timeout = 5000")
+        try:
+            # Serialize schema creation/migration across independent connections.
+            self._conn.execute("BEGIN IMMEDIATE")
             self._conn.execute(
-                "INSERT INTO seen_nonces (nonce) VALUES (?)",
-                (nonce,),
+                "CREATE TABLE IF NOT EXISTS seen_nonces ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "nonce TEXT NOT NULL UNIQUE, "
+                "expires_at REAL NOT NULL DEFAULT 0)"
             )
-            self._conn.execute(
-                "DELETE FROM seen_nonces WHERE id NOT IN ("
-                "SELECT id FROM seen_nonces ORDER BY id DESC LIMIT ?)",
-                (self._max,),
-            )
+            columns = {
+                row[1]
+                for row in self._conn.execute(
+                    "PRAGMA table_info(seen_nonces)"
+                ).fetchall()
+            }
+            if "expires_at" not in columns:
+                # Older databases did not record expiry. Retain their existing
+                # entries conservatively for the maximum protocol freshness window.
+                self._conn.execute(
+                    "ALTER TABLE seen_nonces "
+                    "ADD COLUMN expires_at REAL NOT NULL DEFAULT 0"
+                )
+                self._conn.execute(
+                    "UPDATE seen_nonces SET expires_at = ?",
+                    (time.time() + _MAX_REPLAY_RETENTION_SECONDS,),
+                )
             self._conn.commit()
-            return True
+        except Exception:
+            if self._conn.in_transaction:
+                self._conn.rollback()
+            self._conn.close()
+            raise
+
+    def check_and_add(
+        self,
+        nonce: str,
+        expires_at: float | None = None,
+    ) -> bool:
+        """Atomically reserve a nonce; never evict a still-valid reservation.
+
+        Returns False for a duplicate. Raises _ReplayCacheFullError rather than
+        deleting an unexpired nonce when the configured capacity is exhausted.
+        """
+        if expires_at is None:
+            expires_at = time.time() + _MAX_REPLAY_RETENTION_SECONDS
+        if (
+            isinstance(expires_at, bool)
+            or not isinstance(expires_at, int | float)
+            or not math.isfinite(expires_at)
+        ):
+            raise ValueError("expires_at must be a finite timestamp")
+
+        with self._lock:
+            try:
+                # BEGIN IMMEDIATE serializes read/modify/write across connections
+                # and processes, not merely threads sharing this Python object.
+                self._conn.execute("BEGIN IMMEDIATE")
+                now = time.time()
+                self._conn.execute(
+                    "DELETE FROM seen_nonces WHERE expires_at <= ?",
+                    (now,),
+                )
+                row = self._conn.execute(
+                    "SELECT 1 FROM seen_nonces WHERE nonce = ? LIMIT 1",
+                    (nonce,),
+                ).fetchone()
+                if row is not None:
+                    self._conn.commit()
+                    return False
+
+                count = self._conn.execute(
+                    "SELECT COUNT(*) FROM seen_nonces"
+                ).fetchone()
+                if count is None or count[0] >= self._max:
+                    raise _ReplayCacheFullError(
+                        "replay cache capacity exhausted by unexpired nonces"
+                    )
+
+                self._conn.execute(
+                    "INSERT INTO seen_nonces (nonce, expires_at) VALUES (?, ?)",
+                    (nonce, float(expires_at)),
+                )
+                self._conn.commit()
+                return True
+            except Exception:
+                if self._conn.in_transaction:
+                    self._conn.rollback()
+                raise
 
 
 # ---------------------------------------------------------------------------
@@ -272,14 +347,6 @@ class SecureAgentChannel:
                 self._write_audit(envelope, "TIMESTAMP_FROM_FUTURE", envelope.sender_id)
                 return ValidationResult.reject(ReasonCode.TIMESTAMP_FROM_FUTURE)
 
-            if not self._replay.check_and_add(envelope.nonce):
-                logger.warning(
-                    "Replay detected from %s",
-                    _sanitize(envelope.sender_id),
-                )
-                self._write_audit(envelope, "REPLAY_DETECTED", envelope.sender_id)
-                return ValidationResult.reject(ReasonCode.REPLAY_DETECTED)
-
             canonical = self._canonicalize(dict(envelope.payload))
             expected = self._sign(
                 key_id=envelope.key_id,
@@ -295,6 +362,19 @@ class SecureAgentChannel:
                 )
                 self._write_audit(envelope, "INVALID_SIGNATURE", "<unverified>")
                 return ValidationResult.reject(ReasonCode.INVALID_SIGNATURE)
+
+            # Reserve only after cryptographic authentication, so an invalid
+            # signature cannot poison the nonce of a legitimate envelope.
+            if not self._replay.check_and_add(
+                envelope.nonce,
+                expires_at=envelope.timestamp + self._max_delay,
+            ):
+                logger.warning(
+                    "Replay detected from %s",
+                    _sanitize(envelope.sender_id),
+                )
+                self._write_audit(envelope, "REPLAY_DETECTED", envelope.sender_id)
+                return ValidationResult.reject(ReasonCode.REPLAY_DETECTED)
 
             return ValidationResult.ok()
 
