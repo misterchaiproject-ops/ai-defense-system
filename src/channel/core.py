@@ -140,17 +140,13 @@ class _ReplayCache:
                 "expires_at REAL NOT NULL DEFAULT 0)"
             )
             columns = {
-                row[1]
-                for row in self._conn.execute(
-                    "PRAGMA table_info(seen_nonces)"
-                ).fetchall()
+                row[1] for row in self._conn.execute("PRAGMA table_info(seen_nonces)").fetchall()
             }
             if "expires_at" not in columns:
                 # Older databases did not record expiry. Retain their existing
                 # entries conservatively for the maximum protocol freshness window.
                 self._conn.execute(
-                    "ALTER TABLE seen_nonces "
-                    "ADD COLUMN expires_at REAL NOT NULL DEFAULT 0"
+                    "ALTER TABLE seen_nonces ADD COLUMN expires_at REAL NOT NULL DEFAULT 0"
                 )
                 self._conn.execute(
                     "UPDATE seen_nonces SET expires_at = ?",
@@ -200,9 +196,7 @@ class _ReplayCache:
                     self._conn.commit()
                     return False
 
-                count = self._conn.execute(
-                    "SELECT COUNT(*) FROM seen_nonces"
-                ).fetchone()
+                count = self._conn.execute("SELECT COUNT(*) FROM seen_nonces").fetchone()
                 if count is None or count[0] >= self._max:
                     raise _ReplayCacheFullError(
                         "replay cache capacity exhausted by unexpired nonces"
