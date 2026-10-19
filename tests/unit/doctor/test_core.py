@@ -26,8 +26,8 @@ def healthy_root(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Path:
     """A deterministic temp root simulating a healthy project environment."""
-    (tmp_path / "uv.lock").write_text("version = 1\\n")
-    (tmp_path / "pyproject.toml").write_text("[project]\\nname = 'x'\\n")
+    (tmp_path / "uv.lock").write_text("version = 1\n")
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n")
 
     # Unit tests must not depend on host uv installation or lock semantics.
     monkeypatch.setattr("doctor.core._uv_lock_is_synced", lambda root: True)
