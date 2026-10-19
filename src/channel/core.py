@@ -272,14 +272,9 @@ class SecureAgentChannel:
                 self._write_audit(envelope, "TIMESTAMP_FROM_FUTURE", envelope.sender_id)
                 return ValidationResult.reject(ReasonCode.TIMESTAMP_FROM_FUTURE)
 
-            if not self._replay.check_and_add(envelope.nonce):
-                logger.warning(
-                    "Replay detected from %s",
-                    _sanitize(envelope.sender_id),
-                )
-                self._write_audit(envelope, "REPLAY_DETECTED", envelope.sender_id)
-                return ValidationResult.reject(ReasonCode.REPLAY_DETECTED)
-
+            # Authenticate the envelope before mutating replay state. Otherwise an
+            # unauthenticated message can reserve a nonce and deny the matching
+            # legitimate message service.
             canonical = self._canonicalize(dict(envelope.payload))
             expected = self._sign(
                 key_id=envelope.key_id,
@@ -295,6 +290,17 @@ class SecureAgentChannel:
                 )
                 self._write_audit(envelope, "INVALID_SIGNATURE", "<unverified>")
                 return ValidationResult.reject(ReasonCode.INVALID_SIGNATURE)
+
+            # Consult replay state only after successful authentication.
+            # The replay-store implementation remains responsible for safe
+            # duplicate detection under concurrent calls.
+            if not self._replay.check_and_add(envelope.nonce):
+                logger.warning(
+                    "Replay detected from %s",
+                    _sanitize(envelope.sender_id),
+                )
+                self._write_audit(envelope, "REPLAY_DETECTED", envelope.sender_id)
+                return ValidationResult.reject(ReasonCode.REPLAY_DETECTED)
 
             return ValidationResult.ok()
 
