@@ -291,8 +291,9 @@ class SecureAgentChannel:
                 self._write_audit(envelope, "INVALID_SIGNATURE", "<unverified>")
                 return ValidationResult.reject(ReasonCode.INVALID_SIGNATURE)
 
-            # check_and_add must atomically test-and-reserve the nonce. It is
-            # intentionally performed only after successful authentication.
+            # Consult replay state only after successful authentication.
+            # The replay-store implementation remains responsible for safe
+            # duplicate detection under concurrent calls.
             if not self._replay.check_and_add(envelope.nonce):
                 logger.warning(
                     "Replay detected from %s",
