@@ -1,9 +1,13 @@
-"""Stable interfaces for replaceable security infrastructure components.
+"""Stable interfaces and default adapters for security infrastructure."""
 
-The ports package contains dependency boundaries only. Concrete implementations
-remain in their existing layers and are introduced incrementally in later phases.
-"""
-
+from .defaults import MappingKeyProvider, SystemClock
 from .protocols import AuditSink, Clock, KeyProvider, ReplayStore
 
-__all__ = ["AuditSink", "Clock", "KeyProvider", "ReplayStore"]
+__all__ = [
+    "AuditSink",
+    "Clock",
+    "KeyProvider",
+    "MappingKeyProvider",
+    "ReplayStore",
+    "SystemClock",
+]

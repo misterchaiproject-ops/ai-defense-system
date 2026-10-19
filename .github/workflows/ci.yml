@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -24,12 +23,12 @@ jobs:
       - run: uv python install 3.12
       - run: uv sync --frozen
       - name: mypy --strict
-        run: uv run mypy src/contracts src/guardrail src/channel src/orchestrator tests
+        run: uv run mypy src/contracts src/guardrail src/channel src/orchestrator src/ports tests
       - name: ruff check
         run: uv run ruff check .
       - name: ruff format check
         run: uv run ruff format --check .
       - name: bandit
-        run: uv run bandit -r src/contracts src/guardrail src/channel src/orchestrator -q
+        run: uv run bandit -r src/contracts src/guardrail src/channel src/orchestrator src/ports -q
       - name: pytest
-        run: uv run pytest --cov=src/contracts --cov=src/guardrail --cov=src/channel --cov=src/orchestrator --cov-report=term-missing --cov-fail-under=40 -v
+        run: uv run pytest --cov=src/contracts --cov=src/guardrail --cov=src/channel --cov=src/orchestrator --cov=src/ports --cov-report=term-missing --cov-fail-under=40 -v
