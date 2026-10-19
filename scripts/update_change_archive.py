@@ -21,8 +21,10 @@ ARCHIVE_SUBJECT = "docs: update automated change archive"
 
 
 def git(*args: str) -> str:
+    # The executable is resolved once; arguments are passed as a list without a shell.
+    # nosec: arguments are internal Git subcommands and commit IDs read from local history.
     result = subprocess.run(
-        [GIT_EXECUTABLE, *args],  # noqa: S603 - fixed executable, no shell, controlled arguments
+        [GIT_EXECUTABLE, *args],  # noqa: S603
         cwd=ROOT,
         check=True,
         capture_output=True,
