@@ -22,15 +22,15 @@ import re
 import secrets
 import sqlite3
 import threading
-import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from audit import AuditEvent, SecureAuditLog
+from audit import AuditEvent
 from contracts import ReasonCode, ValidationResult
+from ports import AuditSink, Clock, KeyProvider, MappingKeyProvider, ReplayStore, SystemClock
 
 logger = logging.getLogger(__name__)
 
@@ -48,11 +48,6 @@ _CONTROL = re.compile(r"[\x00-\x1f\x7f\u200b-\u200f\u2028-\u202f\ufeff]")
 def _sanitize(value: Any, max_len: int = 64) -> str:
     """Remove control characters and truncate (anti Log-Injection)."""
     return _CONTROL.sub("", str(value))[:max_len]
-
-
-# ---------------------------------------------------------------------------
-# Envelope
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,11 +81,6 @@ class Envelope:
             raise TypeError("payload must be a Mapping")
         if not isinstance(self.payload, MappingProxyType):
             object.__setattr__(self, "payload", MappingProxyType(dict(self.payload)))
-
-
-# ---------------------------------------------------------------------------
-# Replay cache
-# ---------------------------------------------------------------------------
 
 
 class _ReplayCache:
@@ -145,13 +135,12 @@ class _ReplayCache:
             return True
 
 
-# ---------------------------------------------------------------------------
-# Channel
-# ---------------------------------------------------------------------------
+class _SystemClock(SystemClock):
+    """Backward-compatible private name for the default clock."""
 
 
 class SecureAgentChannel:
-    """Signs and verifies envelopes."""
+    """Signs and verifies envelopes using injectable security infrastructure."""
 
     def __init__(
         self,
@@ -162,29 +151,26 @@ class SecureAgentChannel:
         key_ring: Mapping[str, bytes] | None = None,
         active_key_id: str | None = None,
         db_path: Path | str | None = None,
-        audit_log: SecureAuditLog | None = None,
+        audit_log: AuditSink | None = None,
+        *,
+        replay_store: ReplayStore | None = None,
+        clock: Clock | None = None,
+        key_provider: KeyProvider | None = None,
     ) -> None:
-        if key_ring is not None and (shared_secret is not None or key_id is not None):
-            raise ValueError("shared_secret/key_id and key_ring are mutually exclusive")
+        if key_provider is not None and (
+            shared_secret is not None
+            or key_id is not None
+            or key_ring is not None
+            or active_key_id is not None
+        ):
+            raise ValueError("key_provider is mutually exclusive with legacy key arguments")
 
-        if key_ring is not None:
-            if not key_ring:
-                raise ValueError("key_ring must not be empty")
+        if key_provider is not None:
+            self._key_provider = key_provider
+        elif key_ring is not None:
             if active_key_id is None:
                 raise ValueError("active_key_id is required with key_ring")
-            if active_key_id not in key_ring:
-                raise ValueError(f"active_key_id {active_key_id!r} not present in key_ring")
-            validated_ring: dict[str, bytes] = {}
-            for kid, sec in key_ring.items():
-                if not _SENDER_RE.match(kid):
-                    raise ValueError(f"invalid key_id: {kid!r}")
-                if not isinstance(sec, bytes):
-                    raise TypeError(f"secret for {kid!r} must be bytes")
-                if len(sec) < _MIN_SECRET_BYTES:
-                    raise ValueError(f"secret for {kid!r} must be >= {_MIN_SECRET_BYTES} bytes")
-                validated_ring[kid] = bytes(sec)
-            self._key_ring = validated_ring
-            self._key_id = active_key_id
+            self._key_provider = MappingKeyProvider(key_ring, active_key_id)
         else:
             if shared_secret is None or key_id is None:
                 raise ValueError(
@@ -196,8 +182,10 @@ class SecureAgentChannel:
                 raise ValueError(f"shared_secret must be >= {_MIN_SECRET_BYTES} bytes")
             if not _SENDER_RE.match(key_id):
                 raise ValueError("invalid key_id")
-            self._key_ring = {key_id: bytes(shared_secret)}
-            self._key_id = key_id
+            self._key_provider = MappingKeyProvider({key_id: shared_secret}, key_id)
+
+        if not isinstance(self._key_provider, KeyProvider):
+            raise TypeError("key_provider must implement KeyProvider")
 
         if isinstance(max_delay_seconds, bool) or not isinstance(max_delay_seconds, int | float):
             raise TypeError("max_delay_seconds must be numeric")
@@ -205,28 +193,38 @@ class SecureAgentChannel:
             raise ValueError("max_delay_seconds must be in (0, 300]")
 
         if allowed_senders is not None:
-            for s in allowed_senders:
-                if not isinstance(s, str) or not _SENDER_RE.match(s):
-                    raise ValueError(f"invalid sender: {s!r}")
+            for sender in allowed_senders:
+                if not isinstance(sender, str) or not _SENDER_RE.match(sender):
+                    raise ValueError(f"invalid sender: {sender!r}")
 
         self._allowed = allowed_senders
         self._max_delay = float(max_delay_seconds)
-        self._replay = _ReplayCache(db_path=db_path)
+        self._replay: ReplayStore = replay_store if replay_store is not None else _ReplayCache(db_path=db_path)
         self._audit_log = audit_log
+        self._clock: Clock = clock if clock is not None else _SystemClock()
 
-    # ------------------------------------------------------------------
-    # Create
-    # ------------------------------------------------------------------
+        if not isinstance(self._replay, ReplayStore):
+            raise TypeError("replay_store must implement ReplayStore")
+        if not isinstance(self._clock, Clock):
+            raise TypeError("clock must implement Clock")
+        if self._audit_log is not None and not isinstance(self._audit_log, AuditSink):
+            raise TypeError("audit_log must implement AuditSink")
+
+        # Preserve legacy private attributes for existing integrations that inspect them.
+        self._key_ring = dict(key_ring) if key_ring is not None else None
+        self._key_id = self._key_provider.get_active_key_id()
+
     def create_message(self, sender_id: str, payload: Mapping[str, Any]) -> Envelope:
         if not _SENDER_RE.match(sender_id):
             raise ValueError("invalid sender_id")
 
         canonical = self._canonicalize(payload)
-        timestamp = time.time()
+        timestamp = self._clock.now()
         nonce = secrets.token_hex(16)
+        key_id = self._key_provider.get_active_key_id()
 
         sig = self._sign(
-            key_id=self._key_id,
+            key_id=key_id,
             sender_id=sender_id,
             timestamp=timestamp,
             nonce=nonce,
@@ -235,7 +233,7 @@ class SecureAgentChannel:
 
         return Envelope(
             version=PROTOCOL_VERSION,
-            key_id=self._key_id,
+            key_id=key_id,
             sender_id=sender_id,
             timestamp=timestamp,
             nonce=nonce,
@@ -243,9 +241,6 @@ class SecureAgentChannel:
             signature=sig,
         )
 
-    # ------------------------------------------------------------------
-    # Verify
-    # ------------------------------------------------------------------
     def verify_message(self, envelope: Any) -> ValidationResult:
         try:
             if not isinstance(envelope, Envelope):
@@ -254,30 +249,32 @@ class SecureAgentChannel:
             if envelope.version != PROTOCOL_VERSION:
                 return ValidationResult.reject(ReasonCode.UNSUPPORTED_VERSION)
 
-            if envelope.key_id not in self._key_ring:
-                self._write_audit(envelope, "UNKNOWN_KEY_ID", "<unknown>")
+            if self._key_provider.get_key(envelope.key_id) is None:
+                if not self._write_audit(envelope, "UNKNOWN_KEY_ID", "<unknown>"):
+                    return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
                 return ValidationResult.reject(ReasonCode.UNKNOWN_KEY_ID)
 
             if self._allowed is not None and envelope.sender_id not in self._allowed:
                 logger.warning("Unauthorized sender: %s", _sanitize(envelope.sender_id))
-                self._write_audit(envelope, "ROLE_NOT_PERMITTED", envelope.sender_id)
+                if not self._write_audit(envelope, "ROLE_NOT_PERMITTED", envelope.sender_id):
+                    return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
                 return ValidationResult.reject(ReasonCode.ROLE_NOT_PERMITTED)
 
-            now = time.time()
+            now = self._clock.now()
             delta = now - envelope.timestamp
             if delta > self._max_delay:
-                self._write_audit(envelope, "TIMESTAMP_TOO_OLD", envelope.sender_id)
+                if not self._write_audit(envelope, "TIMESTAMP_TOO_OLD", envelope.sender_id):
+                    return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
                 return ValidationResult.reject(ReasonCode.TIMESTAMP_TOO_OLD)
             if delta < -_MAX_CLOCK_SKEW_FUTURE:
-                self._write_audit(envelope, "TIMESTAMP_FROM_FUTURE", envelope.sender_id)
+                if not self._write_audit(envelope, "TIMESTAMP_FROM_FUTURE", envelope.sender_id):
+                    return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
                 return ValidationResult.reject(ReasonCode.TIMESTAMP_FROM_FUTURE)
 
             if not self._replay.check_and_add(envelope.nonce):
-                logger.warning(
-                    "Replay detected from %s",
-                    _sanitize(envelope.sender_id),
-                )
-                self._write_audit(envelope, "REPLAY_DETECTED", envelope.sender_id)
+                logger.warning("Replay detected from %s", _sanitize(envelope.sender_id))
+                if not self._write_audit(envelope, "REPLAY_DETECTED", envelope.sender_id):
+                    return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
                 return ValidationResult.reject(ReasonCode.REPLAY_DETECTED)
 
             canonical = self._canonicalize(dict(envelope.payload))
@@ -293,7 +290,8 @@ class SecureAgentChannel:
                     "Invalid signature from %s",
                     _sanitize(envelope.sender_id),
                 )
-                self._write_audit(envelope, "INVALID_SIGNATURE", "<unverified>")
+                if not self._write_audit(envelope, "INVALID_SIGNATURE", "<unverified>"):
+                    return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
                 return ValidationResult.reject(ReasonCode.INVALID_SIGNATURE)
 
             return ValidationResult.ok()
@@ -302,9 +300,6 @@ class SecureAgentChannel:
             logger.exception("Channel internal error")
             return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
 
-    # ------------------------------------------------------------------
-    # Internals
-    # ------------------------------------------------------------------
     @staticmethod
     def _canonicalize(payload: Mapping[str, Any]) -> bytes:
         try:
@@ -330,7 +325,10 @@ class SecureAgentChannel:
         nonce: str,
         canonical_payload: bytes,
     ) -> str:
-        mac = hmac.new(self._key_ring[key_id], digestmod=hashlib.sha256)
+        secret = self._key_provider.get_key(key_id)
+        if secret is None:
+            raise KeyError(f"unknown key_id: {key_id!r}")
+        mac = hmac.new(secret, digestmod=hashlib.sha256)
         mac.update(PROTOCOL_VERSION.encode())
         mac.update(b"\x00")
         mac.update(sender_id.encode())
@@ -347,14 +345,14 @@ class SecureAgentChannel:
         envelope: Envelope,
         reason: str,
         agent_id: str,
-    ) -> None:
-        """Best-effort audit write. Never raises, never blocks verify."""
+    ) -> bool:
+        """Persist a security audit event; report failure to the caller."""
         if self._audit_log is None:
-            return
+            return True
         try:
             event = AuditEvent(
                 event_type="verify_rejected",
-                timestamp=time.time(),
+                timestamp=self._clock.now(),
                 agent_id=agent_id,
                 details={
                     "reason": reason,
@@ -366,8 +364,13 @@ class SecureAgentChannel:
                 },
             )
             self._audit_log.append(event)
+            return True
         except Exception:
-            logger.exception("Audit write failed; continuing without audit record")
+            logger.critical(
+                "Audit write failed for reason=%s; verification will fail closed",
+                _sanitize(reason),
+            )
+            return False
 
 
 def generate_shared_secret() -> bytes:
