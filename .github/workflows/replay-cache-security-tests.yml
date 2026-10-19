@@ -33,5 +33,7 @@ jobs:
         run: uv run ruff check src/channel/core.py tests/unit/channel/test_core.py tests/unit/channel/test_replay_cache_security.py
       - name: Check formatting of changed Python files
         run: uv run ruff format --check src/channel/core.py tests/unit/channel/test_core.py tests/unit/channel/test_replay_cache_security.py
-      - name: Run channel regression and replay-cache security tests
-        run: uv run pytest tests/unit/channel/test_core.py tests/unit/channel/test_replay_cache_security.py -q
+      - name: Run Bandit on security-critical source scope
+        run: uv run bandit -r src/contracts src/guardrail src/channel src/orchestrator -q
+      - name: Run full project regression suite
+        run: uv run pytest --cov=src/contracts --cov=src/guardrail --cov=src/channel --cov=src/orchestrator --cov-report=term-missing --cov-fail-under=40 -q
