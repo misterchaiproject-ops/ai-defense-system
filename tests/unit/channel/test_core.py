@@ -893,6 +893,24 @@ class TestAuditLogging:
         assert events[0].agent_id == "Agent_A"
         assert events[0].details["reason"] == "REPLAY_DETECTED"
 
+    def test_replay_cache_capacity_exhaustion_writes_audit(
+        self,
+        wired_channel: SecureAgentChannel,
+        audit_logger: SecureAuditLog,
+    ) -> None:
+        wired_channel._replay._max = 1
+        first = wired_channel.create_message("Agent_A", {"x": 1})
+        second = wired_channel.create_message("Agent_A", {"x": 2})
+
+        assert wired_channel.verify_message(first).approved is True
+        result = wired_channel.verify_message(second)
+
+        assert result.approved is False
+        assert result.reason is ReasonCode.INTERNAL_ERROR
+        events = audit_logger.read_all()
+        assert len(events) == 1
+        assert events[0].details["reason"] == "REPLAY_CACHE_FULL"
+
     def test_invalid_signature_writes_audit(
         self,
         wired_channel: SecureAgentChannel,
