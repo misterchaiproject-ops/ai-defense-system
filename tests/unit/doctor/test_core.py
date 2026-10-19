@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-import os
 from pathlib import Path
 
 import pytest
@@ -22,15 +21,21 @@ from doctor.core import (
 
 
 @pytest.fixture
-def healthy_root(tmp_path: Path) -> Path:
-    """A temp root simulating a healthy project."""
-    lock = tmp_path / "uv.lock"
-    pyproj = tmp_path / "pyproject.toml"
-    lock.write_text("version = 1\n")
-    pyproj.write_text("[project]\nname = 'x'\n")
-    # lock must be newer than pyproject
-    os.utime(pyproj, (1000, 1000))
-    os.utime(lock, (2000, 2000))
+def healthy_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Path:
+    """A deterministic temp root simulating a healthy project environment."""
+    (tmp_path / "uv.lock").write_text("version = 1\n")
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n")
+
+    # Unit tests must not depend on host uv installation or lock semantics.
+    monkeypatch.setattr("doctor.core._uv_lock_is_synced", lambda root: True)
+
+    # Isolate the global pre-commit cache check from the runner's HOME.
+    fake_home = tmp_path / "home"
+    (fake_home / ".cache" / "pre-commit").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(fake_home))
     return tmp_path
 
 
