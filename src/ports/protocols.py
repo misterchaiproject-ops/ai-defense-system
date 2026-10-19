@@ -6,11 +6,12 @@ They define the minimum contracts required by future dependency-injection work.
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from audit import AuditEvent
 
 
+@runtime_checkable
 class AuditSink(Protocol):
     """Durable destination for security audit events."""
 
@@ -19,6 +20,7 @@ class AuditSink(Protocol):
         ...
 
 
+@runtime_checkable
 class ReplayStore(Protocol):
     """Store used to enforce nonce uniqueness across message verification."""
 
@@ -27,6 +29,7 @@ class ReplayStore(Protocol):
         ...
 
 
+@runtime_checkable
 class Clock(Protocol):
     """Source of wall-clock time used by security decisions."""
 
@@ -35,6 +38,7 @@ class Clock(Protocol):
         ...
 
 
+@runtime_checkable
 class KeyProvider(Protocol):
     """Source of cryptographic keys used by authenticated channels."""
 
