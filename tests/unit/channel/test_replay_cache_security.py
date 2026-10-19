@@ -7,6 +7,7 @@ poison nonce state, and independent SQLite connections reserve each nonce atomic
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import sqlite3
 from pathlib import Path
 from threading import Barrier
 
@@ -65,6 +66,35 @@ def test_invalid_signature_does_not_poison_legitimate_nonce() -> None:
     legitimate_result = channel.verify_message(envelope)
     assert legitimate_result.approved is True
     assert legitimate_result.reason is ReasonCode.OK
+
+
+def test_nonce_retention_uses_maximum_protocol_window_for_shared_database(
+    tmp_path: Path,
+) -> None:
+    """A short-window verifier must not expire nonces for longer-window peers."""
+    database = tmp_path / "shared-replay-cache.sqlite3"
+    channel = SecureAgentChannel(
+        shared_secret=generate_shared_secret(),
+        key_id="test-v1",
+        allowed_senders=frozenset({"Agent_A"}),
+        max_delay_seconds=30,
+        db_path=database,
+    )
+    envelope = channel.create_message("Agent_A", {"action": "shared-window"})
+    result = channel.verify_message(envelope)
+    assert result.approved is True
+
+    connection = sqlite3.connect(database)
+    try:
+        row = connection.execute(
+            "SELECT expires_at FROM seen_nonces WHERE nonce = ?",
+            (envelope.nonce,),
+        ).fetchone()
+    finally:
+        connection.close()
+
+    assert row is not None
+    assert row[0] == envelope.timestamp + 300.0
 
 
 def test_independent_sqlite_connections_do_not_accept_same_nonce_twice(
