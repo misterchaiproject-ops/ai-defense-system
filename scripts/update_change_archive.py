@@ -8,17 +8,21 @@ Archive commits are excluded to prevent recursive entries.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+GIT_EXECUTABLE = shutil.which("git")
+if GIT_EXECUTABLE is None:
+    raise RuntimeError("Git executable was not found on PATH")
 OUTPUT = ROOT / "docs" / "CHANGELOG.md"
 ARCHIVE_SUBJECT = "docs: update automated change archive"
 
 
 def git(*args: str) -> str:
     result = subprocess.run(
-        ["git", *args],
+        [GIT_EXECUTABLE, *args],  # noqa: S603 - fixed executable, no shell, controlled arguments
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -38,7 +42,8 @@ def build_archive() -> str:
 
     for line in raw.splitlines():
         sha, date, author, subject = line.split("\t", 3)
-        if subject == ARCHIVE_SUBJECT or subject.startswith("docs: update automated change archive"):
+        is_archive_commit = subject.startswith(ARCHIVE_SUBJECT)
+        if is_archive_commit:
             continue
 
         files_raw = git("show", "--format=", "--name-status", sha)
