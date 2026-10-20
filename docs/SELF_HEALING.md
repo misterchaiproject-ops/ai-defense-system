@@ -1,7 +1,7 @@
 # SELF-HEALING FOUNDATION — AI Defense System
 
-> **Status:** Draft v0.1 (Phase 3.5)
-> **Last Updated:** 2026-10-03
+> **Status:** Draft v0.2 (Phase 3.5)
+> **Last Updated:** 2026-10-20
 > **Owner:** misterchaiproject-ops
 
 ---
@@ -16,6 +16,7 @@
 - **Dry-Run قبل التنفيذ**: لا تعديل صامت — كل إصلاح يمر عبر Git Diff Preview.
 - **Bounded Scope**: نطاق محدود بدقة (L1/L2 الآن، L3/L4 لاحقاً).
 - **Zero-Regressions**: كل إصلاح يمر عبر make check (7 خطوات) + Coverage >= 80%.
+- **Resource/Data Governance first**: لا يتم تفعيل Self-Healing runtime capabilities قبل وجود حدود قابلة للإنفاذ للموارد والبيانات والتنفيذ.
 
 ### 1.2 خارج النطاق (Out of Scope)
 
@@ -23,6 +24,7 @@
 - تعديل خوارزميات التشفير (HMAC, AES-GCM).
 - تعديل الـ API العام لأي وحدة أمنية.
 - إصلاح فشل اختبارات (AssertionError) — يحتاج بشرياً.
+- تجاوز Resource/Data/Execution Governance.
 
 ---
 
@@ -45,7 +47,7 @@
   1. تكتب التعديلات في staging مؤقت (tmp copy).
   2. تُولّد git diff من staging إلى working.
   3. تُلزم المستخدم بالمراجعة قبل التطبيق.
-- استثناء: fix.sh (L1+L2) يُطبّق مباشرة لأنه deterministic + مُثبت بـ 291 اختبار.
+- استثناء: fix.sh (L1+L2) يُطبّق مباشرة لأنه deterministic + مُثبت باختبارات المشروع.
 
 ### 3.2 Bounded Scope
 
@@ -53,7 +55,7 @@
 
 | مسموح (L1/L2) | ممنوع (يحتاج بشرياً) |
 |:---|:---|
-| (int, float) إلى int | float | تغيير قيم ثوابت أمنية |
+| (int, float) إلى int | تغيير قيم ثوابت أمنية |
 | ترتيب imports | تعديل توقيع دالة |
 | إزالة whitespace زائد | إضافة/حذف معامل |
 | إزالة متغيرات غير مستخدمة | تعديل منطق if/else |
@@ -77,6 +79,16 @@ fix -> make check (7/7) -> coverage >= 80% -> safe-commit.sh
 ```
 
 أي فشل = rollback فوري من .bak أو git restore.
+
+### 3.5 Resource/Data/Execution Governance Gate
+
+قبل أي L3/L4 runtime healing capability، يجب أن تتوفر وتُختبر الحدود المعرفة في:
+
+`docs/RESOURCE_DATA_GOVERNANCE.md`
+
+وتشمل على الأقل: resource budgets, data classification/retention, execution authorization, isolation, circuit breakers, audit evidence, verification, and rollback.
+
+Prompt instructions are not considered an enforcement boundary.
 
 ---
 
@@ -156,6 +168,7 @@ Run 'make doctor --fix' to clean stale caches.
 | safe-commit.sh | يُغلِف كل شيء في commit ذرّي |
 | pre-commit | Gate أخير قبل git |
 | Makefile | نقطة دخول موحّدة (make doctor) |
+| Resource/Data Governance | يحدد حدود الموارد والبيانات والتنفيذ قبل L3/L4 |
 
 ---
 
@@ -173,6 +186,7 @@ Run 'make doctor --fix' to clean stale caches.
 - Error Analysis Prompt: يمرّر Traceback + مقتطف الكود المُصاب فقط.
 - Targeted Fix Prompt: يُلزم النموذج بإخراج patch محدود النطاق.
 - Constraint: النموذج لا يُنفّذ — يقتصر على اقتراح patch يمر عبر Human Gate.
+- **Additional constraint:** LLM output can propose an action, but deterministic contracts/policies decide whether that action is executable.
 
 ---
 
@@ -184,12 +198,16 @@ Run 'make doctor --fix' to clean stale caches.
 | كسر منطق أمني | Human Gate على src/audit/ و src/channel/ |
 | انحدار صامت | Zero-Regressions Gate + Coverage Gate |
 | دَين تقني تراكمي | make doctor دوري + cache cleanup |
-| Prompt Injection على LLM Repair | Bounded Scope + Human Approval |
+| Prompt Injection على LLM Repair | Bounded Scope + Human Approval + deterministic enforcement |
+| Resource exhaustion | Resource budgets + rate/concurrency limits + circuit breakers |
+| Data leakage | identity-bound authorization + classification + retention + isolation |
+| Self-Healing privilege escalation | allowlisted actions + immutable capability boundary |
 
 ---
 
 ## 9. References
 
+- `docs/RESOURCE_DATA_GOVERNANCE.md` — Resource, Data & Execution Governance baseline
 - docs/THREAT_MODEL.md — §15 (Known Gaps)
 - docs/CONSTITUTION.md — §3 (Forbidden Patterns)
 - docs/VERIFICATION_PROTOCOL.md — Pre-Flight Checklist
