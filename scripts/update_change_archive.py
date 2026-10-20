@@ -8,6 +8,7 @@ Archive commits are excluded to prevent recursive entries.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -17,12 +18,18 @@ ARCHIVE_SUBJECT = "docs: update automated change archive"
 
 
 def git(*args: str) -> str:
-    result = subprocess.run(
-        ["git", *args],
+    """Run a Git command against the trusted repository root."""
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        raise RuntimeError("git executable not found in PATH")
+
+    result = subprocess.run(  # noqa: S603
+        [git_executable, *args],
         cwd=ROOT,
         check=True,
         capture_output=True,
         text=True,
+        shell=False,
     )
     return result.stdout
 
@@ -38,15 +45,13 @@ def build_archive() -> str:
 
     for line in raw.splitlines():
         sha, date, author, subject = line.split("\t", 3)
-        if subject == ARCHIVE_SUBJECT or subject.startswith("docs: update automated change archive"):
+        if subject == ARCHIVE_SUBJECT or subject.startswith(
+            "docs: update automated change archive"
+        ):
             continue
 
         files_raw = git("show", "--format=", "--name-status", sha)
-        files = [
-            item.strip()
-            for item in files_raw.splitlines()
-            if item.strip()
-        ]
+        files = [item.strip() for item in files_raw.splitlines() if item.strip()]
 
         entries.append(f"### {date} — `{sha[:12]}` — {subject}")
         entries.append(f"- Author: {author}")
