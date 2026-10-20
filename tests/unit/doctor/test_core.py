@@ -190,9 +190,19 @@ class TestRunAll:
 class TestDoctorCLI:
     """Tests for doctor.__main__ CLI entry point."""
 
-    def test_main_healthy_root_returns_zero(self, healthy_root: Path) -> None:
-        """A healthy root exits with code 0."""
-        (healthy_root / ".cache").mkdir()
+    def test_main_healthy_root_returns_zero(
+        self,
+        healthy_root: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A healthy root exits with code 0 deterministically."""
+        fake_home = healthy_root / "fake_home"
+        (fake_home / ".cache" / "pre-commit").mkdir(parents=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+        monkeypatch.setattr(
+            "doctor.core._uv_lock_is_synced",
+            lambda root: True,
+        )
         assert main(["--root", str(healthy_root)]) == 0
 
     def test_main_missing_lock_returns_one(self, tmp_path: Path) -> None:
