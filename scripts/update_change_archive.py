@@ -29,6 +29,7 @@ def git(*args: str) -> str:
         check=True,
         capture_output=True,
         text=True,
+        shell=False,
     )
     return result.stdout
 
@@ -44,7 +45,9 @@ def build_archive() -> str:
 
     for line in raw.splitlines():
         sha, date, author, subject = line.split("\t", 3)
-        if subject == ARCHIVE_SUBJECT or subject.startswith("docs: update automated change archive"):
+        if subject == ARCHIVE_SUBJECT or subject.startswith(
+            "docs: update automated change archive"
+        ):
             continue
 
         files_raw = git("show", "--format=", "--name-status", sha)
