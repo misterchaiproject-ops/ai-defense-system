@@ -468,3 +468,14 @@ This file is the canonical human-readable archive of repository changes.
 - Author: misterchaiproject-ops
 - Files changed:
   - `A	.github/workflows/change-archive.yml`
+
+### 2026-10-20 — `094f975f0e4c` — fix: reconcile doctor isolation and change archive hardening
+- Author: YourName
+- Files changed:
+  - `M	scripts/update_change_archive.py`
+  - `M	tests/unit/doctor/test_core.py`
+  - `A	tests/unit/test_change_archive.py`
+
+### 2026-10-20 — `7d33ae847fd7` — Merge pull request #22 from misterchaiproject-ops/reconcile/doctor-and-archive-fixes
+- Author: misterchaiproject-ops
+- Files changed: none reported
