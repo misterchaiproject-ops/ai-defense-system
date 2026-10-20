@@ -23,13 +23,25 @@ jobs:
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --frozen
+
+      # 1. Type Checking (Mypy) - إضافة audit و doctor
       - name: mypy --strict
-        run: uv run mypy src/contracts src/guardrail src/channel src/orchestrator tests
+        run: uv run mypy src/contracts src/guardrail src/channel src/orchestrator src/audit src/doctor tests
+
+      # 2. Linting & Formatting (Ruff)
       - name: ruff check
         run: uv run ruff check .
       - name: ruff format check
         run: uv run ruff format --check .
+
+      # 3. Security Analysis (Bandit) - إضافة audit و doctor
       - name: bandit
-        run: uv run bandit -r src/contracts src/guardrail src/channel src/orchestrator -q
+        run: uv run bandit -r src/contracts src/guardrail src/channel src/orchestrator src/audit src/doctor -q
+
+      # 4. Dependency Audit (pip-audit) - خطوة جديدة
+      - name: pip-audit
+        run: uv run pip-audit
+
+      # 5. Tests & Coverage (Pytest) - رفع التغطية إلى 80% وإضافة audit و doctor
       - name: pytest
-        run: uv run pytest --cov=src/contracts --cov=src/guardrail --cov=src/channel --cov=src/orchestrator --cov-report=term-missing --cov-fail-under=40 -v
+        run: uv run pytest --cov=src/contracts --cov=src/guardrail --cov=src/channel --cov=src/orchestrator --cov=src/audit --cov=src/doctor --cov-report=term-missing --cov-fail-under=80 -v
