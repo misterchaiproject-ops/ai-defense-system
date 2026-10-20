@@ -50,7 +50,7 @@ def _uv_lock_is_synced(root: Path) -> bool:
         return False
     try:
         # S603: args is a fixed list (no shell), uv resolved via shutil.which.
-        result = subprocess.run(  # nosec B603
+        result = subprocess.run(  # noqa: S603  # nosec B603
             [uv, "lock", "--check"],
             cwd=root,
             capture_output=True,
