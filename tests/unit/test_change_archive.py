@@ -17,9 +17,7 @@ def test_git_uses_resolved_executable_argument_vector_and_fixed_root(
     captured: dict[str, object] = {}
     monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/git")
 
-    def fake_run(
-        command: list[str], **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         captured["command"] = command
         captured.update(kwargs)
         return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
@@ -54,9 +52,7 @@ def test_git_propagates_nonzero_exit(
 ) -> None:
     monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/git")
 
-    def fake_run(
-        command: list[str], **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         raise subprocess.CalledProcessError(1, command)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
