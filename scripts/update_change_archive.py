@@ -51,11 +51,7 @@ def build_archive() -> str:
             continue
 
         files_raw = git("show", "--format=", "--name-status", sha)
-        files = [
-            item.strip()
-            for item in files_raw.splitlines()
-            if item.strip()
-        ]
+        files = [item.strip() for item in files_raw.splitlines() if item.strip()]
 
         entries.append(f"### {date} — `{sha[:12]}` — {subject}")
         entries.append(f"- Author: {author}")
