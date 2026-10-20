@@ -22,15 +22,19 @@ from doctor.core import (
 
 
 @pytest.fixture
-def healthy_root(tmp_path: Path) -> Path:
+def healthy_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A temp root simulating a healthy project."""
     lock = tmp_path / "uv.lock"
     pyproj = tmp_path / "pyproject.toml"
     lock.write_text("version = 1\n")
     pyproj.write_text("[project]\nname = 'x'\n")
-    # lock must be newer than pyproject
+    # Keep the fixture deterministic: the Doctor's external checks are
+    # represented as healthy without depending on the host environment.
     os.utime(pyproj, (1000, 1000))
     os.utime(lock, (2000, 2000))
+    monkeypatch.setattr("doctor.core._uv_lock_is_synced", lambda root: True)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".cache" / "pre-commit").mkdir(parents=True)
     return tmp_path
 
 
@@ -192,7 +196,6 @@ class TestDoctorCLI:
 
     def test_main_healthy_root_returns_zero(self, healthy_root: Path) -> None:
         """A healthy root exits with code 0."""
-        (healthy_root / ".cache").mkdir()
         assert main(["--root", str(healthy_root)]) == 0
 
     def test_main_missing_lock_returns_one(self, tmp_path: Path) -> None:
