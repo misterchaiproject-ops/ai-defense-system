@@ -349,47 +349,21 @@ class SecureAgentChannel:
     def _write_audit(
         self,
         envelope: Envelope,
-        reason: str,
+        reason: ReasonCode,
         agent_id: str,
     ) -> None:
-        """Best-effort audit write. Never raises, never blocks verify."""
+        """Write audit event. Fail-closed: raises AuditWriteError on failure."""
         if self._audit_log is None:
-            return
+            raise AuditWriteError("Audit log not configured")
+
         try:
             event = AuditEvent(
-                event_type="verify_rejected",
+                event_type=reason.value,
                 timestamp=time.time(),
                 agent_id=agent_id,
                 details={
-                    "reason": reason,
-    def _write_audit(
-    self,
-    envelope: Envelope,
-    reason: ReasonCode,
-    agent_id: str,
-) -> None:
-    """Write audit event. Fail-closed: raises AuditWriteError on failure."""
-    if self._audit_log is None:
-        raise AuditWriteError("Audit log not configured")
-
-    try:
-        event = AuditEvent(
-            event_type=reason.value,
-            timestamp=time.time(),
-            agent_id=agent_id,
-            details={
-                "reason": reason.value,
-                "key_id": envelope.key_id,
-                "sender_id": envelope.sender_id,
-                "nonce": envelope.nonce,
-                "timestamp_attempted": envelope.timestamp,
-                "protocol_version": envelope.version,
-            },
-        )
-        self._audit_log.append(event)
-    except Exception as exc:
-        logger.exception("Audit write failed")
-        raise AuditWriteError("Security audit write failed") from exc                "key_id": envelope.key_id,
+                    "reason": reason.value,
+                    "key_id": envelope.key_id,
                     "sender_id": envelope.sender_id,
                     "nonce": envelope.nonce,
                     "timestamp_attempted": envelope.timestamp,
@@ -397,8 +371,9 @@ class SecureAgentChannel:
                 },
             )
             self._audit_log.append(event)
-        except Exception:
-            logger.exception("Audit write failed; continuing without audit record")
+        except Exception as exc:
+            logger.exception("Audit write failed")
+            raise AuditWriteError("Security audit write failed") from exc
 
 
 def generate_shared_secret() -> bytes:
