@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import time
+from collections.abc import Callable
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -72,7 +73,7 @@ def test_write_audit_raises_audit_write_error() -> None:
 )
 def test_security_rejection_fails_closed_on_audit_error(
     reason: ReasonCode,
-    make_envelope: object,
+    make_envelope: Callable[[SecureAgentChannel], Envelope],
 ) -> None:
     channel = _channel()
     if reason is ReasonCode.ROLE_NOT_PERMITTED:
@@ -83,7 +84,7 @@ def test_security_rejection_fails_closed_on_audit_error(
         )
     channel._audit_log = _failing_audit_log()
 
-    envelope = make_envelope(channel)  # type: ignore[operator]
+    envelope = make_envelope(channel)
     result = channel.verify_message(envelope)
 
     assert result.approved is False
