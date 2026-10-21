@@ -3,7 +3,7 @@ Comprehensive test suite for contracts.reason_codes.ReasonCode.
 
 Covers five categories:
   1. Happy paths (all expected members exist with correct values).
-  2. Boundary conditions (all 16 codes, iteration completeness).
+  2. Boundary conditions (all 17 codes, iteration completeness).
   3. Invalid inputs (lookup by unknown value).
   4. Security vectors (StrEnum behavior, immutability, hashability).
   5. Fail-closed behaviors (uniqueness, JSON serialization).
@@ -73,9 +73,10 @@ class TestReasonCodeHappyPaths:
 class TestReasonCodeBoundaryConditions:
     """Structural properties of the enum."""
 
-    def test_exactly_16_members(self) -> None:
-        """The current registry has exactly 16 codes."""
-        assert len(list(ReasonCode)) == 16
+    def test_exactly_17_members(self) -> None:
+        """The current registry has 17 codes after the intentional AUDIT_FAILURE addition."""
+        # AUDIT_FAILURE was intentionally added for the fail-closed audit security fix.
+        assert len(list(ReasonCode)) == 17
 
     def test_all_values_equal_their_names(self) -> None:
         """Every code's value matches its member name."""
