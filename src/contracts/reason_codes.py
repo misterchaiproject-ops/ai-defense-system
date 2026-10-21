@@ -23,6 +23,9 @@ class ReasonCode(StrEnum):
     # ---- Success ---------------------------------------------------------
     OK = "OK"
 
+    # --- Audit Failure ---
+    AUDIT_FAILURE = "AUDIT_FAILURE"
+
     # ---- Input validation ------------------------------------------------
     INVALID_TYPE = "INVALID_TYPE"
     MALFORMED_PAYLOAD = "MALFORMED_PAYLOAD"

@@ -32,6 +32,8 @@ from typing import Any
 from audit import AuditEvent, SecureAuditLog
 from contracts import ReasonCode, ValidationResult
 
+from .exceptions import AuditWriteError
+
 logger = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = "v1"
@@ -255,21 +257,21 @@ class SecureAgentChannel:
                 return ValidationResult.reject(ReasonCode.UNSUPPORTED_VERSION)
 
             if envelope.key_id not in self._key_ring:
-                self._write_audit(envelope, "UNKNOWN_KEY_ID", "<unknown>")
+                self._write_audit(envelope, ReasonCode.UNKNOWN_KEY_ID, "<unknown>")
                 return ValidationResult.reject(ReasonCode.UNKNOWN_KEY_ID)
 
             if self._allowed is not None and envelope.sender_id not in self._allowed:
                 logger.warning("Unauthorized sender: %s", _sanitize(envelope.sender_id))
-                self._write_audit(envelope, "ROLE_NOT_PERMITTED", envelope.sender_id)
+                self._write_audit(envelope, ReasonCode.ROLE_NOT_PERMITTED, envelope.sender_id)
                 return ValidationResult.reject(ReasonCode.ROLE_NOT_PERMITTED)
 
             now = time.time()
             delta = now - envelope.timestamp
             if delta > self._max_delay:
-                self._write_audit(envelope, "TIMESTAMP_TOO_OLD", envelope.sender_id)
+                self._write_audit(envelope, ReasonCode.TIMESTAMP_TOO_OLD, envelope.sender_id)
                 return ValidationResult.reject(ReasonCode.TIMESTAMP_TOO_OLD)
             if delta < -_MAX_CLOCK_SKEW_FUTURE:
-                self._write_audit(envelope, "TIMESTAMP_FROM_FUTURE", envelope.sender_id)
+                self._write_audit(envelope, ReasonCode.TIMESTAMP_FROM_FUTURE, envelope.sender_id)
                 return ValidationResult.reject(ReasonCode.TIMESTAMP_FROM_FUTURE)
 
             if not self._replay.check_and_add(envelope.nonce):
@@ -277,7 +279,7 @@ class SecureAgentChannel:
                     "Replay detected from %s",
                     _sanitize(envelope.sender_id),
                 )
-                self._write_audit(envelope, "REPLAY_DETECTED", envelope.sender_id)
+                self._write_audit(envelope, ReasonCode.REPLAY_DETECTED, envelope.sender_id)
                 return ValidationResult.reject(ReasonCode.REPLAY_DETECTED)
 
             canonical = self._canonicalize(dict(envelope.payload))
@@ -293,11 +295,14 @@ class SecureAgentChannel:
                     "Invalid signature from %s",
                     _sanitize(envelope.sender_id),
                 )
-                self._write_audit(envelope, "INVALID_SIGNATURE", "<unverified>")
+                self._write_audit(envelope, ReasonCode.INVALID_SIGNATURE, "<unverified>")
                 return ValidationResult.reject(ReasonCode.INVALID_SIGNATURE)
 
             return ValidationResult.ok()
 
+        except AuditWriteError:
+            logger.critical("Audit failure prevented security rejection")
+            return ValidationResult.reject(ReasonCode.AUDIT_FAILURE)
         except Exception:
             logger.exception("Channel internal error")
             return ValidationResult.reject(ReasonCode.INTERNAL_ERROR)
@@ -345,19 +350,20 @@ class SecureAgentChannel:
     def _write_audit(
         self,
         envelope: Envelope,
-        reason: str,
+        reason: ReasonCode,
         agent_id: str,
     ) -> None:
-        """Best-effort audit write. Never raises, never blocks verify."""
+        """Write audit event. Fail-closed: raises AuditWriteError on failure."""
         if self._audit_log is None:
-            return
+            raise AuditWriteError("Audit log not configured")
+
         try:
             event = AuditEvent(
-                event_type="verify_rejected",
+                event_type=reason.value,
                 timestamp=time.time(),
                 agent_id=agent_id,
                 details={
-                    "reason": reason,
+                    "reason": reason.value,
                     "key_id": envelope.key_id,
                     "sender_id": envelope.sender_id,
                     "nonce": envelope.nonce,
@@ -366,8 +372,9 @@ class SecureAgentChannel:
                 },
             )
             self._audit_log.append(event)
-        except Exception:
-            logger.exception("Audit write failed; continuing without audit record")
+        except Exception as exc:
+            logger.exception("Audit write failed")
+            raise AuditWriteError("Security audit write failed") from exc
 
 
 def generate_shared_secret() -> bytes:
