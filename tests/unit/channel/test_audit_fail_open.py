@@ -1,9 +1,11 @@
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
-from channel.core import SecureAgentChannel, Envelope
-from channel.exceptions import AuditWriteError
+
+import pytest
+
 from audit.core import SecureAuditLog
+from channel.core import Envelope, SecureAgentChannel
+from channel.exceptions import AuditWriteError
 from contracts.reason_codes import ReasonCode
 
 def test_audit_failure_returns_audit_failure_reason(tmp_path: Path) -> None:
