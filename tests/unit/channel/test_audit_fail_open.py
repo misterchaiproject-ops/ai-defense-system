@@ -1,11 +1,12 @@
 import pytest
+from pathlib import Path
 from unittest.mock import MagicMock
 from channel.core import SecureAgentChannel, Envelope
 from channel.exceptions import AuditWriteError
 from audit.core import SecureAuditLog
 from contracts.reason_codes import ReasonCode
 
-def test_audit_failure_returns_audit_failure_reason(tmp_path):
+def test_audit_failure_returns_audit_failure_reason(tmp_path: Path) -> None:
     """Invariant 2 & 3: Audit failure -> reject with AUDIT_FAILURE."""
     dummy_secret = b"0" * 32
     channel = SecureAgentChannel(shared_secret=dummy_secret, key_id="test_key")
@@ -21,7 +22,7 @@ def test_audit_failure_returns_audit_failure_reason(tmp_path):
     assert result.approved is False
     assert result.reason == ReasonCode.AUDIT_FAILURE
 
-def test_write_audit_raises_audit_write_error(tmp_path):
+def test_write_audit_raises_audit_write_error(tmp_path: Path) -> None:
     """T9: _write_audit itself raises AuditWriteError on failure."""
     dummy_secret = b"0" * 32
     channel = SecureAgentChannel(shared_secret=dummy_secret, key_id="test_key")
@@ -40,7 +41,7 @@ def test_write_audit_raises_audit_write_error(tmp_path):
     with pytest.raises(AuditWriteError, match="Security audit write failed"):
         channel._write_audit(envelope, ReasonCode.REPLAY_DETECTED, "sender")
 
-def test_audit_event_type_uses_reason_value(tmp_path):
+def test_audit_event_type_uses_reason_value(tmp_path: Path) -> None:
     """T10: event_type == reason.value."""
     dummy_secret = b"0" * 32
     channel = SecureAgentChannel(shared_secret=dummy_secret, key_id="test_key")
