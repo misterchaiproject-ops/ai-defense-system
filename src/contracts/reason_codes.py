@@ -45,5 +45,8 @@ class ReasonCode(StrEnum):
     TIMESTAMP_TOO_OLD = "TIMESTAMP_TOO_OLD"
     TIMESTAMP_FROM_FUTURE = "TIMESTAMP_FROM_FUTURE"
 
+    # ---- Audit -----------------------------------------------------------
+    AUDIT_FAILURE = "AUDIT_FAILURE"
+
     # ---- Fallback --------------------------------------------------------
     INTERNAL_ERROR = "INTERNAL_ERROR"
