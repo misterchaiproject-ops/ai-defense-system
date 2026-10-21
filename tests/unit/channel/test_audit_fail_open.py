@@ -10,6 +10,7 @@ import pytest
 
 from audit import SecureAuditLog
 from channel.core import Envelope, SecureAgentChannel
+from channel.exceptions import AuditWriteError
 from contracts import ReasonCode
 
 
@@ -21,6 +22,15 @@ def _failing_audit_log() -> MagicMock:
 
 def _channel() -> SecureAgentChannel:
     return SecureAgentChannel(shared_secret=b"0" * 32, key_id="test-v1")
+
+
+def test_write_audit_raises_audit_write_error() -> None:
+    channel = _channel()
+    channel._audit_log = _failing_audit_log()
+    envelope = channel.create_message("Agent_A", {"x": 1})
+
+    with pytest.raises(AuditWriteError):
+        channel._write_audit(envelope, ReasonCode.INVALID_SIGNATURE, "<unverified>")
 
 
 @pytest.mark.parametrize(
@@ -109,8 +119,8 @@ def test_security_rejection_preserves_original_reason_when_audit_succeeds() -> N
 
 def test_unrelated_exception_remains_internal_error() -> None:
     channel = _channel()
-    channel._canonicalize = MagicMock(side_effect=RuntimeError("unexpected internal error"))
     envelope = channel.create_message("Agent_A", {"x": 1})
+    channel._canonicalize = MagicMock(side_effect=RuntimeError("unexpected internal error"))
 
     result = channel.verify_message(envelope)
 
