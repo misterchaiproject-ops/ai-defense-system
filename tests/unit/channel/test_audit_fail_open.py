@@ -8,6 +8,7 @@ from channel.core import Envelope, SecureAgentChannel
 from channel.exceptions import AuditWriteError
 from contracts.reason_codes import ReasonCode
 
+
 def test_audit_failure_returns_audit_failure_reason(tmp_path: Path) -> None:
     """Invariant 2 & 3: Audit failure -> reject with AUDIT_FAILURE."""
     dummy_secret = b"0" * 32
@@ -17,12 +18,21 @@ def test_audit_failure_returns_audit_failure_reason(tmp_path: Path) -> None:
     failing_audit_log.append.side_effect = Exception("Disk Full")
     channel._audit_log = failing_audit_log
 
-    envelope = MagicMock(spec=Envelope)
+    envelope = Envelope(
+        version="v1",
+        key_id="test_key",
+        sender_id="sender",
+        timestamp=0.0,
+        nonce="0" * 32,
+        payload={},
+        signature="0" * 64,
+    )
 
     result = channel.verify_message(envelope)
 
     assert result.approved is False
     assert result.reason == ReasonCode.AUDIT_FAILURE
+
 
 def test_write_audit_raises_audit_write_error(tmp_path: Path) -> None:
     """T9: _write_audit itself raises AuditWriteError on failure."""
@@ -42,6 +52,7 @@ def test_write_audit_raises_audit_write_error(tmp_path: Path) -> None:
 
     with pytest.raises(AuditWriteError, match="Security audit write failed"):
         channel._write_audit(envelope, ReasonCode.REPLAY_DETECTED, "sender")
+
 
 def test_audit_event_type_uses_reason_value(tmp_path: Path) -> None:
     """T10: event_type == reason.value."""
