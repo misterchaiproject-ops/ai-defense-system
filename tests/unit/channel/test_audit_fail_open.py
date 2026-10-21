@@ -1,31 +1,132 @@
+"""Security regression tests for audit fail-closed behavior."""
+
+from __future__ import annotations
+
+import dataclasses
+import time
 from unittest.mock import MagicMock
 
 import pytest
 
-from src.audit.core import SecureAuditLog
-from src.channel.core import Envelope, SecureAgentChannel
+from audit import SecureAuditLog
+from channel.core import Envelope, SecureAgentChannel
+from contracts import ReasonCode
 
 
-def test_write_audit_fails_open_on_error(tmp_path):
-    # 1. إعداد قناة آمنة
-    dummy_secret = b"0" * 32
-    dummy_key_id = "test_key_001"
-    channel = SecureAgentChannel(shared_secret=dummy_secret, key_id=dummy_key_id)
+def _failing_audit_log() -> MagicMock:
+    audit_log = MagicMock(spec=SecureAuditLog)
+    audit_log.append.side_effect = OSError("Disk Full (Simulated)")
+    return audit_log
 
-    # 2. إعداد سجل تدقيق وهمي يفشل عند الكتابة
-    failing_audit_log = MagicMock(spec=SecureAuditLog)
-    failing_audit_log.append.side_effect = Exception("Disk Full (Simulated)")
-    channel._audit_log = failing_audit_log
 
-    # 3. محاولة الكتابة (يجب أن تفشل بصمت حالياً - Fail-Open)
-    # نستخدم envelope وهمي
-    dummy_envelope = MagicMock(spec=Envelope)
+def _channel() -> SecureAgentChannel:
+    return SecureAgentChannel(shared_secret=b"0" * 32, key_id="test-v1")
 
-    # هذا هو الاختبار: يجب ألا يرفع استثناء (لأنه Best-effort)
-    try:
-        channel._write_audit(envelope=dummy_envelope, reason="TEST", agent_id="agent_1")
-    except Exception as e:
-        pytest.fail(f"Audit write should have failed silently, but raised: {e}")
 
-    # إذا وصلنا هنا، فهذا يثبت الثغرة (Fail-Open)
-    print("VULNERABILITY CONFIRMED: Audit write failed silently (Fail-Open)")
+@pytest.mark.parametrize(
+    ("reason", "make_envelope"),
+    [
+        (
+            ReasonCode.UNKNOWN_KEY_ID,
+            lambda channel: dataclasses.replace(
+                channel.create_message("Agent_A", {"x": 1}),
+                key_id="unknown-v1",
+            ),
+        ),
+        (
+            ReasonCode.ROLE_NOT_PERMITTED,
+            lambda channel: channel.create_message("Agent_A", {"x": 1}),
+        ),
+        (
+            ReasonCode.TIMESTAMP_TOO_OLD,
+            lambda channel: dataclasses.replace(
+                channel.create_message("Agent_A", {"x": 1}),
+                timestamp=time.time() - 301,
+            ),
+        ),
+        (
+            ReasonCode.TIMESTAMP_FROM_FUTURE,
+            lambda channel: dataclasses.replace(
+                channel.create_message("Agent_A", {"x": 1}),
+                timestamp=time.time() + 2,
+            ),
+        ),
+        (
+            ReasonCode.INVALID_SIGNATURE,
+            lambda channel: dataclasses.replace(
+                channel.create_message("Agent_A", {"x": 1}),
+                signature="0" * 64,
+            ),
+        ),
+    ],
+)
+def test_security_rejection_fails_closed_on_audit_error(reason, make_envelope) -> None:
+    channel = _channel()
+    if reason is ReasonCode.ROLE_NOT_PERMITTED:
+        channel = SecureAgentChannel(
+            shared_secret=b"0" * 32,
+            key_id="test-v1",
+            allowed_senders=frozenset({"Agent_B"}),
+        )
+    channel._audit_log = _failing_audit_log()
+
+    envelope = make_envelope(channel)
+    result = channel.verify_message(envelope)
+
+    assert result.approved is False
+    assert result.reason is ReasonCode.AUDIT_FAILURE
+
+
+def test_replay_rejection_fails_closed_on_audit_error() -> None:
+    channel = _channel()
+    channel._audit_log = _failing_audit_log()
+    envelope = channel.create_message("Agent_A", {"x": 1})
+
+    first_result = channel.verify_message(envelope)
+    assert first_result.approved is True
+    assert first_result.reason is ReasonCode.OK
+
+    replay_result = channel.verify_message(envelope)
+    assert replay_result.approved is False
+    assert replay_result.reason is ReasonCode.AUDIT_FAILURE
+
+
+def test_security_rejection_preserves_original_reason_when_audit_succeeds() -> None:
+    channel = _channel()
+    audit_log = MagicMock(spec=SecureAuditLog)
+    channel._audit_log = audit_log
+    envelope = dataclasses.replace(
+        channel.create_message("Agent_A", {"x": 1}),
+        signature="0" * 64,
+    )
+
+    result = channel.verify_message(envelope)
+
+    assert result.approved is False
+    assert result.reason is ReasonCode.INVALID_SIGNATURE
+    audit_log.append.assert_called_once()
+
+
+def test_unrelated_exception_remains_internal_error() -> None:
+    channel = _channel()
+    channel._canonicalize = MagicMock(side_effect=RuntimeError("unexpected internal error"))
+    envelope = channel.create_message("Agent_A", {"x": 1})
+
+    result = channel.verify_message(envelope)
+
+    assert result.approved is False
+    assert result.reason is ReasonCode.INTERNAL_ERROR
+
+
+def test_audit_failure_never_returns_ok() -> None:
+    channel = _channel()
+    channel._audit_log = _failing_audit_log()
+    envelope = dataclasses.replace(
+        channel.create_message("Agent_A", {"x": 1}),
+        signature="0" * 64,
+    )
+
+    result = channel.verify_message(envelope)
+
+    assert result.reason is not ReasonCode.OK
+    assert result.approved is False
