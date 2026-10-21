@@ -10,15 +10,15 @@ def test_audit_failure_returns_audit_failure_reason(tmp_path: Path) -> None:
     """Invariant 2 & 3: Audit failure -> reject with AUDIT_FAILURE."""
     dummy_secret = b"0" * 32
     channel = SecureAgentChannel(shared_secret=dummy_secret, key_id="test_key")
-    
+
     failing_audit_log = MagicMock(spec=SecureAuditLog)
     failing_audit_log.append.side_effect = Exception("Disk Full")
     channel._audit_log = failing_audit_log
 
     envelope = MagicMock(spec=Envelope)
-    
+
     result = channel.verify_message(envelope)
-    
+
     assert result.approved is False
     assert result.reason == ReasonCode.AUDIT_FAILURE
 
@@ -57,7 +57,7 @@ def test_audit_event_type_uses_reason_value(tmp_path: Path) -> None:
     envelope.version = "1.0"
 
     channel._write_audit(envelope, ReasonCode.REPLAY_DETECTED, "sender")
-    
+
     args, kwargs = mock_audit_log.append.call_args
     event = args[0]
     assert event.event_type == "REPLAY_DETECTED"
