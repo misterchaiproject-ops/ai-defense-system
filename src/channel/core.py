@@ -30,8 +30,8 @@ from types import MappingProxyType
 from typing import Any
 
 from audit import AuditEvent, SecureAuditLog
-from contracts import ReasonCode, ValidationResult
 from .exceptions import AuditWriteError
+from contracts import ReasonCode, ValidationResult
 
 logger = logging.getLogger(__name__)
 
