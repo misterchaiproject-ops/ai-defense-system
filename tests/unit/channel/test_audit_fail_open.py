@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import time
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -70,7 +70,10 @@ def test_write_audit_raises_audit_write_error() -> None:
         ),
     ],
 )
-def test_security_rejection_fails_closed_on_audit_error(reason, make_envelope) -> None:
+def test_security_rejection_fails_closed_on_audit_error(
+    reason: ReasonCode,
+    make_envelope: object,
+) -> None:
     channel = _channel()
     if reason is ReasonCode.ROLE_NOT_PERMITTED:
         channel = SecureAgentChannel(
@@ -80,7 +83,7 @@ def test_security_rejection_fails_closed_on_audit_error(reason, make_envelope) -
         )
     channel._audit_log = _failing_audit_log()
 
-    envelope = make_envelope(channel)
+    envelope = make_envelope(channel)  # type: ignore[operator]
     result = channel.verify_message(envelope)
 
     assert result.approved is False
@@ -120,9 +123,12 @@ def test_security_rejection_preserves_original_reason_when_audit_succeeds() -> N
 def test_unrelated_exception_remains_internal_error() -> None:
     channel = _channel()
     envelope = channel.create_message("Agent_A", {"x": 1})
-    channel._canonicalize = MagicMock(side_effect=RuntimeError("unexpected internal error"))
-
-    result = channel.verify_message(envelope)
+    with patch.object(
+        channel,
+        "_canonicalize",
+        MagicMock(side_effect=RuntimeError("unexpected internal error")),
+    ):
+        result = channel.verify_message(envelope)
 
     assert result.approved is False
     assert result.reason is ReasonCode.INTERNAL_ERROR
