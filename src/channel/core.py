@@ -30,8 +30,9 @@ from types import MappingProxyType
 from typing import Any
 
 from audit import AuditEvent, SecureAuditLog
-from .exceptions import AuditWriteError
 from contracts import ReasonCode, ValidationResult
+
+from .exceptions import AuditWriteError
 
 logger = logging.getLogger(__name__)
 
@@ -379,4 +380,3 @@ class SecureAgentChannel:
 def generate_shared_secret() -> bytes:
     """Generate a cryptographically strong 256-bit secret."""
     return secrets.token_bytes(32)
-
