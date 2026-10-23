@@ -9,7 +9,7 @@ from dataclasses import MISSING, FrozenInstanceError, fields
 
 import pytest
 
-from src.trust.contracts import (
+from trust.contracts import (
     AttestationFailureReason,
     AttestationMeasurements,
     AttestationRequest,
@@ -68,7 +68,7 @@ def valid_verified_message(
 
 
 def test_no_enforcement_state_in_trust_contracts() -> None:
-    import src.trust.contracts as contracts
+    import trust.contracts as contracts
 
     assert not hasattr(contracts, "EnforcementState")
 
@@ -107,7 +107,7 @@ def test_failure_model_allows_untrusted(valid_evidence: EvidenceRef) -> None:
 
 
 def test_no_policy_context_in_trust_contracts() -> None:
-    import src.trust.contracts as contracts
+    import trust.contracts as contracts
 
     assert not hasattr(contracts, "PolicyContext")
 
