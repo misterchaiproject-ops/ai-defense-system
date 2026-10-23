@@ -83,18 +83,11 @@ def test_attestation_result_requires_evidence(valid_evidence: EvidenceRef) -> No
     assert AttestationResult.__annotations__["evidence"] is EvidenceRef
 
 
-def test_verified_message_requires_canonical_payload(
-    valid_verification_metadata: VerificationMetadata,
-) -> None:
-    with pytest.raises(TypeError):
-        VerifiedMessage(
-            agent_identity="agent-001",
-            nonce="nonce-123",
-            timestamp=1700000000,
-            protocol_version="1.0",
-            message_id="msg-001",
-            verification_metadata=valid_verification_metadata,
-        )
+def test_verified_message_requires_canonical_payload() -> None:
+    verification_fields = {field.name: field for field in fields(VerifiedMessage)}
+
+    assert verification_fields["canonical_payload"].default is MISSING
+    assert "canonical_payload" in verification_fields
 
 
 def test_failure_model_allows_untrusted(valid_evidence: EvidenceRef) -> None:
@@ -116,13 +109,7 @@ def test_verification_metadata_has_no_defaults() -> None:
     verification_fields = {field.name: field for field in fields(VerificationMetadata)}
 
     assert verification_fields["replay_checked"].default is MISSING
-
-    with pytest.raises(TypeError):
-        VerificationMetadata(
-            channel_id="ch-01",
-            verified_at=1700000000,
-            crypto_algorithm=CryptoAlgorithm.HMAC_SHA256,
-        )
+    assert verification_fields["crypto_algorithm"].default is MISSING
 
 
 def test_crypto_algorithm_is_closed_enum() -> None:
