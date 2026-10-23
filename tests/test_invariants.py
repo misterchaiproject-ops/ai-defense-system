@@ -5,7 +5,7 @@ These tests validate the data-contract boundary only.
 They do not prove runtime security, cryptographic correctness, or engine behavior.
 """
 
-from dataclasses import FrozenInstanceError, fields
+from dataclasses import MISSING, FrozenInstanceError, fields
 
 import pytest
 
@@ -16,9 +16,9 @@ from src.trust.contracts import (
     AttestationResult,
     CryptoAlgorithm,
     EvidenceRef,
+    TrustAssessment,
     VerificationMetadata,
     VerifiedMessage,
-    TrustAssessment,
 )
 
 
@@ -115,7 +115,7 @@ def test_no_policy_context_in_trust_contracts() -> None:
 def test_verification_metadata_has_no_defaults() -> None:
     verification_fields = {field.name: field for field in fields(VerificationMetadata)}
 
-    assert verification_fields["replay_checked"].default is field_missing()
+    assert verification_fields["replay_checked"].default is MISSING
 
     with pytest.raises(TypeError):
         VerificationMetadata(
@@ -123,14 +123,6 @@ def test_verification_metadata_has_no_defaults() -> None:
             verified_at=1700000000,
             crypto_algorithm=CryptoAlgorithm.HMAC_SHA256,
         )
-
-
-def field_missing() -> object:
-    """Return the dataclasses sentinel without exposing it as a contract default."""
-
-    from dataclasses import MISSING
-
-    return MISSING
 
 
 def test_crypto_algorithm_is_closed_enum() -> None:
