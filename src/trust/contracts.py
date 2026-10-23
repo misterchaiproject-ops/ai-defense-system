@@ -8,7 +8,6 @@ It must not import Policy, Channel, Audit, or Engine modules.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Tuple
 
 
 class TrustAssessment(Enum):
@@ -61,7 +60,7 @@ class AttestationMeasurements:
 
     software_measurement: str
     configuration_hash: str
-    model_measurement: Optional[str]
+    model_measurement: str | None
     policy_version: str
     runtime_measurement: str
 
@@ -100,7 +99,7 @@ class AttestationRequest:
 
     message: VerifiedMessage
     measurements: AttestationMeasurements
-    requested_capabilities: Tuple[str, ...]
+    requested_capabilities: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,5 +107,5 @@ class AttestationResult:
     """Trust evaluation result; it intentionally contains no enforcement state."""
 
     trust_assessment: TrustAssessment
-    reason: Optional[AttestationFailureReason]
+    reason: AttestationFailureReason | None
     evidence: EvidenceRef
